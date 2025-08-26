@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Search, Calendar, Clock, User } from 'lucide-react'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3001'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
 interface CreatorRow {
   id: number
@@ -48,7 +48,8 @@ export default function CreatorsAvgTimePage() {
         dateTo,
         minCalls: String(minCalls)
       })
-      const res = await fetch(`${API_BASE}/api/admin/creators-avg-call-time?${params.toString()}`)
+      const base = API_BASE || ''
+      const res = await fetch(`${base}/api/admin/creators-avg-call-time?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setRows(json.creators || [])

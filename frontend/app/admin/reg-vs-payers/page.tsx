@@ -16,7 +16,7 @@ interface ApiResponse {
   summary: { totalDays: number; totalRegistrations: number; totalPayers: number }
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
 export default function RegVsPayersPage() {
   const [showFilters, setShowFilters] = useState(false)
@@ -33,7 +33,8 @@ export default function RegVsPayersPage() {
       const params = new URLSearchParams()
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
-      const res = await fetch(`${API_BASE}/api/admin/daily-registrations-vs-payers?${params.toString()}`)
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
+      const res = await fetch(`${base}/api/admin/daily-registrations-vs-payers?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json: ApiResponse = await res.json()
       setRows(json.data || [])

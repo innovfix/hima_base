@@ -6,14 +6,23 @@ async function bootstrap() {
   
   // Enable CORS for frontend (allow multiple ports for development)
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001', 
-      'http://localhost:3002',
-      'http://localhost:3003',
-      'http://localhost:3004',
-      'http://localhost:3005'
-    ],
+    origin: (origin, callback) => {
+      const allowed = new Set([
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+        'http://localhost:3003',
+        'http://localhost:3004',
+        'http://localhost:3005',
+        process.env.ALLOWED_ORIGIN || '',
+        process.env.NEXT_PUBLIC_APP_ORIGIN || '',
+      ].filter(Boolean));
+      if (!origin || allowed.has(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     credentials: true,
   });
   

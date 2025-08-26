@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Users, RefreshCw, Eye, ChevronLeft, ChevronRight, Search, Filter, SortAsc, SortDesc, TrendingUp, BarChart3 } from 'lucide-react'
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
+
 interface User {
   id: number
   name: string
@@ -105,7 +107,8 @@ export default function AdminUsersPage() {
         status: filters.status
       })
       
-      const response = await fetch(`http://localhost:3001/api/admin/users?${params}`)
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
+      const response = await fetch(`${base}/api/admin/users?${params}`)
       
       if (response.ok) {
         const data = await response.json()

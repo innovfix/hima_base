@@ -46,8 +46,8 @@ interface RetentionTrendsResponse {
   }
 }
 
-// Prefer env if provided; fallback to local backend
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+// Prefer env if provided; fallback to same host on :3001
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
 export default function RetentionTrendsPage() {
   const [data, setData] = useState<RetentionTrendsResponse | null>(null)
@@ -73,7 +73,8 @@ export default function RetentionTrendsPage() {
       const params = new URLSearchParams()
       if (filters.regFrom) params.set('regFrom', filters.regFrom)
 
-      const response = await fetch(`${API_BASE}/api/admin/retention-trends?${params.toString()}`)
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
+      const response = await fetch(`${base}/api/admin/retention-trends?${params.toString()}`)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }

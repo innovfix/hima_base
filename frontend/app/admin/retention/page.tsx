@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { Users, RefreshCw, Eye, ChevronLeft, ChevronRight, Search, Filter, SortAsc, SortDesc, TrendingUp, Coins, Calendar, BarChart3 } from 'lucide-react'
 import React from 'react'
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
+
 interface Transaction {
   id: number
   type: string
@@ -102,7 +104,8 @@ export default function UserRetentionPage() {
         dateTo: filters.dateTo
       })
       
-      const response = await fetch(`http://localhost:3001/api/admin/user-retention?${params}`)
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
+      const response = await fetch(`${base}/api/admin/user-retention?${params}`)
       
       if (response.ok) {
         const data = await response.json()

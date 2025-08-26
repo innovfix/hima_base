@@ -1,18 +1,30 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { createPool } from 'mysql2/promise';
-
-const pool = createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USERNAME || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_DATABASE || 'hima_admin',
-  waitForConnections: true,
-  connectionLimit: 10,
-});
+import { ConfigService } from '@nestjs/config';
+import { createPool, Pool } from 'mysql2/promise';
 
 @Controller('admin')
 export class AdminController {
+  private readonly pool: Pool;
+
+  constructor(private readonly config: ConfigService) {
+    const socketPath = this.config.get<string>('DB_SOCKET') || this.config.get<string>('MYSQL_SOCKET') || undefined;
+    const host = socketPath ? undefined : (this.config.get<string>('DB_HOST') || this.config.get<string>('MYSQL_HOST') || 'localhost');
+    const port = socketPath ? undefined : parseInt(this.config.get<string>('DB_PORT') || this.config.get<string>('MYSQL_PORT') || '3306', 10);
+    const user = this.config.get<string>('DB_USERNAME') || this.config.get<string>('MYSQL_USER');
+    const password = this.config.get<string>('DB_PASSWORD') || this.config.get<string>('MYSQL_PASSWORD') || '';
+    const database = this.config.get<string>('DB_DATABASE') || this.config.get<string>('MYSQL_DATABASE') || this.config.get<string>('DB_NAME');
+
+    this.pool = createPool({
+      socketPath,
+      host,
+      port,
+      user,
+      password,
+      database,
+      waitForConnections: true,
+      connectionLimit: 10,
+    });
+  }
   @Get('users')
   async listUsers(
     @Query('page') page: string = '1',
@@ -50,14 +62,14 @@ export class AdminController {
     }
     
     // Get total count for pagination
-    const [countResult] = await pool.query(
+    const [countResult] = await this.pool.query(
       `SELECT COUNT(*) as total FROM users ${whereClause}`,
       params
     );
     const total = (countResult as any)[0].total;
     
     // Get paginated and sorted data
-    const [rows] = await pool.query(
+    const [rows] = await this.pool.query(
       `SELECT 
         id, name, mobile, avatar_id, language, created_at, updated_at, datetime,
         coins, total_coins, interests, gender, age, describe_yourself, voice,
@@ -132,7 +144,7 @@ export class AdminController {
       params.push(dateTo);
     }
 
-    const [countResult] = await pool.query(
+    const [countResult] = await this.pool.query(
       `SELECT COUNT(DISTINCT u.id) as total
        FROM users u
        INNER JOIN transactions t ON u.id = t.user_id
@@ -141,7 +153,7 @@ export class AdminController {
     );
     const total = (countResult as any)[0].total;
 
-    const [rows] = await pool.query(
+    const [rows] = await this.pool.query(
       `SELECT
         u.id,
         u.name,
@@ -173,7 +185,7 @@ export class AdminController {
 
     const usersWithTransactions = await Promise.all(
       (rows as any[]).map(async (user: any) => {
-        const [transactions] = await pool.query(
+        const [transactions] = await this.pool.query(
           `SELECT
             id, type, datetime, coins, amount, payment_type, reason, method_type
            FROM transactions
@@ -274,7 +286,7 @@ export class AdminController {
         break;
     }
 
-    const [rows] = await pool.query(
+    const [rows] = await this.pool.query(
       `SELECT
         ${dateFormat} as date_period,
         COUNT(DISTINCT t.user_id) as unique_users,
@@ -291,7 +303,7 @@ export class AdminController {
     );
 
     // Get user retention metrics (users who made multiple payments)
-    const [retentionData] = await pool.query(
+    const [retentionData] = await this.pool.query(
       `SELECT
         ${dateFormat} as date_period,
         COUNT(DISTINCT t.user_id) as total_users,
@@ -314,7 +326,7 @@ export class AdminController {
     );
 
     // Get new vs existing user breakdown
-    const [newUserData] = await pool.query(
+    const [newUserData] = await this.pool.query(
       `SELECT
         ${dateFormat} as date_period,
         COUNT(DISTINCT CASE WHEN u.created_at >= t.datetime THEN t.user_id END) as new_users,
@@ -331,19 +343,19 @@ export class AdminController {
     let registeredCount = 0;
     if (regFrom || regTo) {
       if (regFrom && regTo) {
-        const [regRows] = await pool.query(
+        const [regRows] = await this.pool.query(
           'SELECT COUNT(*) as cnt FROM users WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?',
           [regFrom, regTo]
         );
         registeredCount = (regRows as any)[0]?.cnt || 0;
       } else if (regFrom) {
-        const [regRows] = await pool.query(
+        const [regRows] = await this.pool.query(
           'SELECT COUNT(*) as cnt FROM users WHERE DATE(created_at) = ?',
           [regFrom]
         );
         registeredCount = (regRows as any)[0]?.cnt || 0;
       } else if (regTo) {
-        const [regRows] = await pool.query(
+        const [regRows] = await this.pool.query(
           'SELECT COUNT(*) as cnt FROM users WHERE DATE(created_at) <= ?',
           [regTo]
         );
@@ -401,7 +413,7 @@ export class AdminController {
       paramsTx.push(dateTo);
     }
 
-    const [regRows] = await pool.query(
+    const [regRows] = await this.pool.query(
       `SELECT DATE(u.created_at) as date_period, COUNT(*) as registrations
        FROM users u
        ${whereDatesUsers}
@@ -411,7 +423,7 @@ export class AdminController {
     );
 
     // Cohort-based payers: only count users who registered on the SAME date they paid
-    const [payerRows] = await pool.query(
+    const [payerRows] = await this.pool.query(
       `SELECT DATE(t.datetime) as date_period, COUNT(DISTINCT t.user_id) as payers
        FROM transactions t
        INNER JOIN users u ON u.id = t.user_id
@@ -499,7 +511,7 @@ export class AdminController {
     const joinClause = `LEFT JOIN transactions t ON ${joinConds.join(' AND ')}`;
 
     // Count creators with income either via tx sum or users.total_income
-    const [countRows] = await pool.query(
+    const [countRows] = await this.pool.query(
       `SELECT COUNT(*) as total FROM (
         SELECT u.id,
                COALESCE(SUM(CASE WHEN t.id IS NOT NULL THEN t.amount ELSE 0 END), 0) as sum_tx,
@@ -515,7 +527,7 @@ export class AdminController {
     const total = (countRows as any)[0]?.total || 0;
 
     // Fetch paginated data
-    const [rows] = await pool.query(
+    const [rows] = await this.pool.query(
       `SELECT 
         u.id,
         u.name,
@@ -647,14 +659,14 @@ export class AdminController {
     `
 
     // Count total creators matching filters
-    const [countRows] = await pool.query(
+    const [countRows] = await this.pool.query(
       `SELECT COUNT(*) AS total FROM (${baseSubquery}) as x`,
       [...params, minCallsNum]
     )
     const total = (countRows as any[])[0]?.total || 0
 
     // Fetch page
-    const [rows] = await pool.query(
+    const [rows] = await this.pool.query(
       `${baseSubquery}
        ORDER BY ${safeSortBy} ${safeSortOrder}
        LIMIT ? OFFSET ?`,
@@ -679,17 +691,17 @@ export class AdminController {
   @Get('dashboard-stats')
   async getDashboardQuickStats() {
     // Total users
-    const [totalRows] = await pool.query(`SELECT COUNT(*) as total FROM users`)
+    const [totalRows] = await this.pool.query(`SELECT COUNT(*) as total FROM users`)
     const totalUsers = (totalRows as any[])[0]?.total || 0
 
     // Users registered today (server date)
-    const [todayRegRows] = await pool.query(
+    const [todayRegRows] = await this.pool.query(
       `SELECT COUNT(*) as cnt FROM users WHERE DATE(created_at) = CURDATE()`
     )
     const todayRegistered = (todayRegRows as any[])[0]?.cnt || 0
 
     // Users who registered today and paid today (cohort-based)
-    const [todayPaidRows] = await pool.query(
+    const [todayPaidRows] = await this.pool.query(
       `SELECT COUNT(DISTINCT t.user_id) as cnt
        FROM transactions t
        INNER JOIN users u ON u.id = t.user_id

@@ -8,7 +8,8 @@ import {
   RefreshCw
 } from 'lucide-react'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3001'
+// Prefer env; otherwise hit same-origin Nginx proxy at /api
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || ''
 
 interface QuickStats {
   totalUsers: number
@@ -26,7 +27,8 @@ export default function DashboardPage() {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`${API_BASE}/api/admin/dashboard-stats`)
+      const base = API_BASE || ''
+      const res = await fetch(`${base}/api/admin/dashboard-stats`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setStats(json)

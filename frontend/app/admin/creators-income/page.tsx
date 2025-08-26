@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BarChart3, RefreshCw, Filter, Search, ChevronLeft, ChevronRight, SortAsc, SortDesc } from 'lucide-react'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
 type SortOrder = 'ASC' | 'DESC'
 
@@ -78,7 +78,8 @@ export default function CreatorsIncomePage() {
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
 
-      const res = await fetch(`${API_BASE}/api/admin/creators-income?${params.toString()}`)
+      const base = API_BASE || ''
+      const res = await fetch(`${base}/api/admin/creators-income?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json: ApiResponse = await res.json()
       setRows(json.creators || [])
