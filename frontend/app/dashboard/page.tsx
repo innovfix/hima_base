@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 
 // Prefer env; otherwise hit same-origin Nginx proxy at /api
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || ''
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3001'
 
 interface QuickStats {
   totalUsers: number

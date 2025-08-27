@@ -646,6 +646,9 @@ export class AdminController {
         u.id,
         u.name,
         u.mobile,
+        u.language,
+        u.audio_status,
+        u.video_status,
         COUNT(c.id) AS total_calls,
         AVG(${durationExpr}) AS avg_duration_seconds,
         SUM(${durationExpr}) AS total_duration_seconds,
@@ -654,7 +657,7 @@ export class AdminController {
       FROM user_calls c
       INNER JOIN users u ON u.id = c.call_user_id
       ${whereClause}
-      GROUP BY u.id, u.name, u.mobile
+      GROUP BY u.id, u.name, u.mobile, u.language, u.audio_status, u.video_status
       HAVING total_calls >= ?
     `
 

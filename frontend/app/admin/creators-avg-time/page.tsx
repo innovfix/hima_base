@@ -3,7 +3,15 @@
 import { useEffect, useState } from 'react'
 import { Search, Calendar, Clock, User } from 'lucide-react'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
+const getToday = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 interface CreatorRow {
   id: number
@@ -33,7 +41,7 @@ export default function CreatorsAvgTimePage() {
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC')
 
   const [search, setSearch] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
+  const [dateFrom, setDateFrom] = useState(getToday())
   const [dateTo, setDateTo] = useState('')
   const [minCalls, setMinCalls] = useState(1)
 
@@ -88,6 +96,17 @@ export default function CreatorsAvgTimePage() {
     return `${sec}s`
   }
 
+  const renderStatus = (value: any) => {
+    const n = Number(value)
+    if (Number.isNaN(n)) return <span>-</span>
+    const active = n === 1
+    return (
+      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+        {active ? 'Active' : 'Inactive'}
+      </span>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b">
@@ -119,7 +138,7 @@ export default function CreatorsAvgTimePage() {
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input type="date" className="pl-10 pr-3 py-2 border rounded-md w-full focus:ring-indigo-500 focus:border-indigo-500"
-                       value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                       value={dateFrom} onChange={(e) => setDateFrom(e.target.value || getToday())} />
               </div>
             </div>
             <div>
@@ -138,7 +157,7 @@ export default function CreatorsAvgTimePage() {
           </div>
           <div className="mt-4 flex gap-2">
             <button onClick={() => { setPage(1); fetchData() }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">Apply</button>
-            <button onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setMinCalls(1); setPage(1); fetchData() }} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Clear</button>
+            <button onClick={() => { setSearch(''); setDateFrom(getToday()); setDateTo(''); setMinCalls(1); setPage(1); fetchData() }} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Clear</button>
           </div>
         </div>
 
@@ -182,8 +201,8 @@ export default function CreatorsAvgTimePage() {
                     <td className="px-3 py-3 text-sm text-gray-900 flex items-center gap-2"><User className="h-4 w-4 text-gray-400"/>{r.name || '-'}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{r.mobile || '-'}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{r.language || '-'}</td>
-                    <td className="px-3 py-3 text-sm text-gray-900">{r.audio_status ?? '-'}</td>
-                    <td className="px-3 py-3 text-sm text-gray-900">{r.video_status ?? '-'}</td>
+                    <td className="px-3 py-3 text-sm text-gray-900">{renderStatus(r.audio_status)}</td>
+                    <td className="px-3 py-3 text-sm text-gray-900">{renderStatus(r.video_status)}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{r.total_calls}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{formatDuration(r.avg_duration_seconds)}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{formatDuration(r.total_duration_seconds)}</td>
