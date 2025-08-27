@@ -9,6 +9,9 @@ interface CreatorRow {
   id: number
   name: string
   mobile: string
+  language?: string | null
+  audio_status?: number | null
+  video_status?: number | null
   total_calls: number
   avg_duration_seconds: number
   total_duration_seconds: number
@@ -148,6 +151,9 @@ export default function CreatorsAvgTimePage() {
                   { key: 'id', label: 'ID' },
                   { key: 'name', label: 'Creator' },
                   { key: 'mobile', label: 'Mobile' },
+                  { key: 'language', label: 'Language' },
+                  { key: 'audio_status', label: 'Audio Status' },
+                  { key: 'video_status', label: 'Video Status' },
                   { key: 'total_calls', label: 'Total Calls' },
                   { key: 'avg_duration_seconds', label: 'Avg Duration' },
                   { key: 'total_duration_seconds', label: 'Total Duration' },
@@ -175,6 +181,9 @@ export default function CreatorsAvgTimePage() {
                     <td className="px-3 py-3 text-sm text-gray-900">{r.id}</td>
                     <td className="px-3 py-3 text-sm text-gray-900 flex items-center gap-2"><User className="h-4 w-4 text-gray-400"/>{r.name || '-'}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{r.mobile || '-'}</td>
+                    <td className="px-3 py-3 text-sm text-gray-900">{r.language || '-'}</td>
+                    <td className="px-3 py-3 text-sm text-gray-900">{r.audio_status ?? '-'}</td>
+                    <td className="px-3 py-3 text-sm text-gray-900">{r.video_status ?? '-'}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{r.total_calls}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{formatDuration(r.avg_duration_seconds)}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{formatDuration(r.total_duration_seconds)}</td>
