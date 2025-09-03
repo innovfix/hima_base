@@ -1048,15 +1048,21 @@ export class AdminController {
       )
       const totalUsers = (countRows as any[])[0]?.totalUsers || 0
 
+      // Whitelist sortable columns for distinct/grouped mode and map to safe SQL aliases
+      const sortableDistinct = new Set([
+        'user_id', 'name', 'mobile', 'language', 'payouts_count', 'total_amount', 'first_payout_at', 'last_payout_at'
+      ])
+      const safeSortByDistinct = sortableDistinct.has(sortBy) ? sortBy : 'last_payout_at'
+
       const [rows] = await this.pool.query(
-        `SELECT u.id as user_id, u.name, u.mobile, u.language,
+        `SELECT u.id as user_id, u.name, u.mobile, COALESCE(u.language,'Unknown') as language,
                 COUNT(w.id) as payouts_count, COALESCE(SUM(w.amount),0) as total_amount,
                 MIN(w.created_at) as first_payout_at, MAX(w.created_at) as last_payout_at
          FROM withdrawals w
          INNER JOIN users u ON u.id = w.user_id
          ${whereClause}
          GROUP BY u.id, u.name, u.mobile, u.language
-         ORDER BY ${sortBy} ${validSortOrder}
+         ORDER BY ${safeSortByDistinct} ${validSortOrder}
          LIMIT ? OFFSET ?`,
         [...params, limitNum, offset]
       )
