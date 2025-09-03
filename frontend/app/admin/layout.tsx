@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, X, LayoutGrid, Users, TrendingUp, BarChart3, LineChart, Wallet } from 'lucide-react'
+import { Menu, X, LayoutGrid, Users, TrendingUp, BarChart3, LineChart, Wallet, Globe } from 'lucide-react'
 
 const navItems = [
   { href: '/dashboard', label: 'Internal Dashboard', icon: LayoutGrid },
@@ -11,8 +11,15 @@ const navItems = [
   { href: '/admin/retention', label: 'User Retention', icon: TrendingUp },
   { href: '/admin/retention-trends', label: 'Retention Trends', icon: LineChart },
   { href: '/admin/reg-vs-payers', label: 'Reg vs Payers', icon: BarChart3 },
+  // Creators group header + links
+  { isHeader: true, label: 'Creators' },
   { href: '/admin/creators-income', label: 'Creators Income', icon: Wallet },
   { href: '/admin/creators-avg-time', label: 'Creators Avg Time', icon: BarChart3 },
+  { href: '/admin/creators-weekly-avg', label: 'Creators Weekly Avg', icon: BarChart3 },
+  { href: '/admin/creator-income-retention', label: 'Creator Income Retention', icon: BarChart3 },
+  { href: '/admin/creators-payouts', label: 'Creators Payouts', icon: Wallet },
+  { href: '/admin/inactive-creators', label: 'Inactive Creators', icon: Users },
+  { href: '/admin/active-users-monitor', label: 'Active Users Monitor', icon: Globe },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -45,12 +52,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="h-[calc(100vh-56px)] sticky top-14 overflow-y-auto p-4">
             <nav className="space-y-1">
               {items.map((item) => {
-                const Icon = item.icon
-                const active = pathname === item.href
+                const it = item as any
+                // Render group headers as non-clickable separators
+                if (it.isHeader) {
+                  return (
+                    <div key={`hdr-${it.label}`} className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      {it.label}
+                    </div>
+                  )
+                }
+                // Guard: ensure href exists before passing to Link (satisfy TS)
+                if (!it.href) return null
+                const Icon = it.icon
+                const active = pathname === it.href
+                const href = String(it.href)
                 return (
                   <Link
-                    key={item.href}
-                    href={item.href}
+                    key={href}
+                    href={href}
                     className={
                       `group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ` +
                       (active
@@ -59,7 +78,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     }
                   >
                     <Icon className="h-4 w-4" />
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{it.label}</span>
                   </Link>
                 )
               })}
@@ -80,12 +99,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
               <nav className="space-y-1">
                 {items.map((item) => {
-                  const Icon = item.icon
-                  const active = pathname === item.href
+                  const it = item as any
+                  if (it.isHeader) {
+                    return (
+                      <div key={`hdr-m-${it.label}`} className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        {it.label}
+                      </div>
+                    )
+                  }
+                  if (!it.href) return null
+                  const Icon = it.icon
+                  const active = pathname === it.href
+                  const href = String(it.href)
                   return (
                     <Link
-                      key={item.href}
-                      href={item.href}
+                      key={href}
+                      href={href}
                       onClick={() => setOpen(false)}
                       className={
                         `group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ` +
@@ -95,7 +124,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       }
                     >
                       <Icon className="h-4 w-4" />
-                      <span className="truncate">{item.label}</span>
+                      <span className="truncate">{it.label}</span>
                     </Link>
                   )
                 })}

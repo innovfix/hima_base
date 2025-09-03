@@ -30,6 +30,7 @@ interface RetentionTrendsResponse {
   trends: TrendData[]
   retention: RetentionData[]
   userBreakdown: UserBreakdownData[]
+  languageTrends?: { date_period: string; language: string; unique_users: number; total_revenue: number }[]
   registeredCount?: number
   filters: {
     dateFrom: string
@@ -49,6 +50,8 @@ interface RetentionTrendsResponse {
 // Prefer env if provided; fallback to same host on :3001
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
+// (rolled back helpers not needed)
+
 export default function RetentionTrendsPage() {
   const [data, setData] = useState<RetentionTrendsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -60,13 +63,6 @@ export default function RetentionTrendsPage() {
 
   const fetchRetentionTrends = async () => {
     try {
-      if (!filters.regFrom) {
-        setLoading(false)
-        setError(null)
-        setData(null)
-        return
-      }
-
       setLoading(true)
       setError(null)
       
@@ -115,6 +111,73 @@ export default function RetentionTrendsPage() {
       return d >= start
     })
   }, [data, filters.regFrom])
+
+  // Build language-wise data series
+  const { languageData, languages } = useMemo(() => {
+    const rows = (data?.languageTrends || []) as any[]
+    if (!rows || rows.length === 0) return { languageData: [], languages: [] as string[] }
+    const langsSet = new Set<string>()
+    const map: Record<string, any> = {}
+    rows.forEach((r: any) => {
+      const lang = r.language || 'Unknown'
+      langsSet.add(lang)
+      const key = typeof r.date_period === 'string' ? r.date_period : new Date(r.date_period).toISOString().slice(0, 10)
+      map[key] = map[key] || { date_period: key }
+      map[key][lang] = Number(r.unique_users) || 0
+      map[key][`rev__${lang}`] = Number(r.total_revenue) || 0
+    })
+    let arr = Object.values(map)
+    if (filters.regFrom) {
+      const start = new Date(filters.regFrom)
+      arr = arr.filter((row: any) => new Date(row.date_period) >= start)
+    }
+    arr.sort((a: any, b: any) => (a.date_period < b.date_period ? -1 : 1))
+    return { languageData: arr, languages: Array.from(langsSet) }
+  }, [data, filters.regFrom])
+
+  const colorPalette = ['#2563EB', '#16A34A', '#DC2626', '#7C3AED', '#EA580C', '#0891B2', '#B91C1C', '#4F46E5', '#0EA5E9', '#22C55E']
+  const colorFor = (idx: number) => colorPalette[idx % colorPalette.length]
+
+  const CustomLanguageTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const row: any = payload[0]?.payload || {}
+      return (
+        <div className="bg-white border border-gray-200 shadow rounded p-3">
+          <p className="font-semibold mb-2">{formatDate(label)}</p>
+          <div className="space-y-1">
+            {languages.map((lang, idx) => {
+              const users = row[lang] || 0
+              const rev = row[`rev__${lang}`] || 0
+              if (!users && !rev) return null
+              return (
+                <div key={lang} className="flex items-center text-sm">
+                  <span className="inline-block w-3 h-3 rounded-sm mr-2" style={{ backgroundColor: colorFor(idx) }} />
+                  <span className="font-medium mr-1">{lang}:</span>
+                  <span className="text-blue-700 mr-2">Users {users}</span>
+                  <span className="text-green-700">Revenue {formatCurrency(rev)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const row = payload[0]?.payload as TrendData
+      return (
+        <div className="bg-white border border-gray-200 shadow rounded p-3">
+          <p className="font-semibold mb-1">{formatDate(label)}</p>
+          <p className="text-blue-700">Paying Users : {row?.unique_users ?? '-'}</p>
+          <p className="text-green-700">Total Revenue : {formatCurrency(row?.total_revenue ?? 0)}</p>
+        </div>
+      )
+    }
+    return null
+  }
 
   if (loading) {
     return (
@@ -290,7 +353,7 @@ export default function RetentionTrendsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* User Count Over Time Chart */}
         <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Paying Users Over Time</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Paying Users and Revenue Over Time</h3>
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={filteredTrends}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -302,10 +365,7 @@ export default function RetentionTrendsPage() {
                 height={80}
               />
               <YAxis />
-              <Tooltip 
-                labelFormatter={(value) => formatDate(value)}
-                formatter={(value: any) => [value, 'Paying Users']}
-              />
+              <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Line 
                 type="monotone" 
@@ -317,6 +377,41 @@ export default function RetentionTrendsPage() {
               />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+
+        {/* Language-wise Users Over Time */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Paying Users by Language</h3>
+          {languageData.length === 0 ? (
+            <div className="text-gray-500 py-16 text-center">No language-wise data for the selected date.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={420}>
+              <LineChart data={languageData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date_period" 
+                  tickFormatter={(value) => formatDate(value)}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis />
+                <Tooltip content={<CustomLanguageTooltip />} />
+                <Legend />
+                {languages.map((lang, i) => (
+                  <Line
+                    key={lang}
+                    type="monotone"
+                    dataKey={lang}
+                    name={lang}
+                    stroke={colorFor(i)}
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>

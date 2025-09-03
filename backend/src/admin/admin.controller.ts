@@ -25,6 +25,93 @@ export class AdminController {
       connectionLimit: 10,
     });
   }
+
+  @Get('active-users-monitor')
+  async getActiveUsersMonitor(
+    @Query('dateFrom') dateFrom: string = '',
+    @Query('dateTo') dateTo: string = '',
+    @Query('groupBy') groupBy: string = 'hour', // hour | day
+    @Query('type') type: string = 'audio' // audio | video
+  ) {
+    // Validate inputs
+    const validGroupBy = groupBy === 'day' ? 'day' : (groupBy === 'minute' ? 'minute' : 'hour')
+    const metric = type === 'video' ? 'video_active_users_count' : 'audio_active_users_count'
+
+    // Default date range: last 7 days
+    let where = 'WHERE 1=1'
+    const params: any[] = []
+    if (dateFrom) {
+      // compare by DATE to include whole day when user passes YYYY-MM-DD
+      where += ' AND DATE(datetime) >= ?'
+      params.push(dateFrom)
+    } else {
+      where += ' AND datetime >= DATE_SUB(NOW(), INTERVAL 7 DAY)'
+    }
+    if (dateTo) {
+      // compare by DATE to include whole day
+      where += ' AND DATE(datetime) <= ?'
+      params.push(dateTo)
+    }
+
+    // Build aggregation
+    let dateExpr = ''
+    let groupClause = ''
+    if (validGroupBy === 'day') {
+      // Use the same expression for SELECT and GROUP BY to satisfy ONLY_FULL_GROUP_BY
+      dateExpr = "DATE(datetime)"
+      groupClause = "DATE(datetime)"
+    } else if (validGroupBy === 'minute') {
+      // minute: group by minute bucket
+      dateExpr = "DATE_FORMAT(datetime, '%Y-%m-%d %H:%i:00')"
+      groupClause = "DATE_FORMAT(datetime, '%Y-%m-%d %H:%i:00')"
+    } else {
+      // hourly: group by the hour bucket string
+      dateExpr = "DATE_FORMAT(datetime, '%Y-%m-%d %H:00:00')"
+      groupClause = "DATE_FORMAT(datetime, '%Y-%m-%d %H:00:00')"
+    }
+
+    const [rows] = await this.pool.query(
+      `SELECT ${dateExpr} as period, COALESCE(language,'Unknown') as language, SUM(${metric}) as value
+       FROM creator_active_monitor
+       ${where}
+       GROUP BY ${groupClause}, COALESCE(language,'Unknown')
+       ORDER BY period ASC`,
+      params
+    )
+
+    // Transform into series per language
+    const seriesMap: Record<string, Record<string, number>> = {}
+    const periodsSet = new Set<string>()
+    ;(rows as any[]).forEach(r => {
+      const p = r.period instanceof Date ? r.period.toISOString().slice(0, validGroupBy === 'day' ? 10 : 13) : r.period
+      periodsSet.add(p)
+      seriesMap[r.language] = seriesMap[r.language] || {}
+      seriesMap[r.language][p] = Number(r.value || 0)
+    })
+
+    const periods = Array.from(periodsSet).sort()
+    const series = Object.keys(seriesMap).map(lang => ({ language: lang, data: periods.map(p => ({ period: p, value: seriesMap[lang][p] || 0 })) }))
+
+    return { periods, series, filters: { dateFrom, dateTo, groupBy: validGroupBy, type } }
+  }
+
+  @Get('active-users-raw')
+  async getActiveUsersRaw(
+    @Query('dateFrom') dateFrom: string = '',
+    @Query('dateTo') dateTo: string = '',
+    @Query('limit') limit: string = '100'
+  ) {
+    const params: any[] = []
+    let where = 'WHERE 1=1'
+    if (dateFrom) { where += ' AND DATE(datetime) >= ?'; params.push(dateFrom) }
+    if (dateTo) { where += ' AND DATE(datetime) <= ?'; params.push(dateTo) }
+    const lim = Math.min(Math.max(parseInt(limit,10)||100,1),1000)
+    const [rows] = await this.pool.query(
+      `SELECT id, datetime, audio_active_users_count, video_active_users_count, language, created_at, updated_at FROM creator_active_monitor ${where} ORDER BY datetime ASC LIMIT ?`,
+      [...params, lim]
+    )
+    return { rows }
+  }
   @Get('users')
   async listUsers(
     @Query('page') page: string = '1',
@@ -434,6 +521,42 @@ export class AdminController {
       paramsTx
     );
 
+    // Language-wise payers per day
+    const [languagePayerRows] = await this.pool.query(
+      `SELECT DATE(t.datetime) as date_period, COALESCE(u.language, 'Unknown') as language, COUNT(DISTINCT t.user_id) as payers
+       FROM transactions t
+       INNER JOIN users u ON u.id = t.user_id
+       ${whereDatesTx}
+       AND DATE(u.created_at) = DATE(t.datetime)
+       GROUP BY DATE(t.datetime), COALESCE(u.language, 'Unknown')
+       ORDER BY date_period ASC`,
+      paramsTx
+    );
+
+    // Language-wise registrations per day
+    const [languageRegRows] = await this.pool.query(
+      `SELECT DATE(u.created_at) as date_period, COALESCE(u.language, 'Unknown') as language, COUNT(*) as registrations
+       FROM users u
+       ${whereDatesUsers}
+       GROUP BY DATE(u.created_at), COALESCE(u.language, 'Unknown')
+       ORDER BY date_period ASC`,
+      paramsUsers
+    );
+
+    // Merge payer and registration counts into a single languageTrends array
+    const langMap: Record<string, any> = {}
+    ;(languagePayerRows as any[]).forEach((r: any) => {
+      const key = `${r.date_period}|${r.language}`
+      langMap[key] = langMap[key] || { date_period: r.date_period, language: r.language, payers: 0, registrations: 0 }
+      langMap[key].payers = Number(r.payers || 0)
+    })
+    ;(languageRegRows as any[]).forEach((r: any) => {
+      const key = `${r.date_period}|${r.language}`
+      langMap[key] = langMap[key] || { date_period: r.date_period, language: r.language, payers: 0, registrations: 0 }
+      langMap[key].registrations = Number(r.registrations || 0)
+    })
+    const mergedLanguageTrends = Object.values(langMap).sort((a: any, b: any) => (a.date_period < b.date_period ? -1 : 1))
+
     // Merge by date
     const map: Record<string, { date_period: string; registrations: number; payers: number }> = {};
     (regRows as any[]).forEach((r: any) => {
@@ -452,6 +575,7 @@ export class AdminController {
     return {
       data: rows,
       filters: { dateFrom, dateTo },
+      languageTrends: mergedLanguageTrends,
       summary: {
         totalDays: rows.length,
         totalRegistrations: rows.reduce((s, r) => s + (r.registrations || 0), 0),
@@ -607,6 +731,9 @@ export class AdminController {
       'first_call_time',
       'last_call_time',
       'name',
+      'language',
+      'audio_status',
+      'video_status',
       'mobile',
       'id'
     ])
@@ -691,6 +818,150 @@ export class AdminController {
     }
   }
 
+  @Get('creators-weekly-avg')
+  async getCreatorsWeeklyAvg(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+    @Query('sortBy') sortBy: string = 'weekly_avg_seconds',
+    @Query('sortOrder') sortOrder: string = 'DESC',
+    @Query('dateFrom') dateFrom: string = '',
+    @Query('dateTo') dateTo: string = '',
+    @Query('minCalls') minCalls: string = '1',
+    @Query('search') search: string = '',
+    @Query('week') week: string = 'current' // 'current' | 'last' | 'custom'
+  ) {
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1)
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200)
+    const offset = (pageNum - 1) * limitNum
+
+    try {
+      const validSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+      // Whitelist sortable columns for this endpoint. Map weekly_avg_seconds to total_seconds_week for SQL ordering
+      const sortableColumns = new Set([
+        'weekly_avg_seconds',
+        'total_seconds_week',
+        'total_calls_week',
+        'name',
+        'language',
+        'audio_status',
+        'video_status',
+        'mobile',
+        'id'
+      ])
+      let safeSortBy = sortableColumns.has(sortBy) ? sortBy : 'weekly_avg_seconds'
+      if (safeSortBy === 'weekly_avg_seconds') safeSortBy = 'total_seconds_week'
+
+    // Duration expression similar to creators-avg-call-time
+    const durationExpr = `
+      CASE 
+        WHEN c.started_time IS NOT NULL AND c.ended_time IS NOT NULL THEN TIME_TO_SEC(TIMEDIFF(c.ended_time, c.started_time))
+        WHEN c.datetime IS NOT NULL AND c.update_current_endedtime IS NOT NULL THEN TIMESTAMPDIFF(SECOND, c.datetime, c.update_current_endedtime)
+        ELSE NULL
+      END
+    `
+
+    // Filters
+    let whereClause = 'WHERE 1=1'
+    const params: any[] = []
+
+    // If custom date range provided, use that. Otherwise allow week selector.
+    if (dateFrom) {
+      whereClause += ' AND DATE(c.datetime) >= ?'
+      params.push(dateFrom)
+    }
+    if (dateTo) {
+      whereClause += ' AND DATE(c.datetime) <= ?'
+      params.push(dateTo)
+    }
+    // If no explicit dateFrom/dateTo, support week filter: current or last (Mon-Sun using YEARWEEK mode 1)
+    if (!dateFrom && !dateTo) {
+      if (week === 'current') {
+        whereClause += ' AND YEARWEEK(c.datetime, 1) = YEARWEEK(CURDATE(), 1)'
+      } else if (week === 'last') {
+        whereClause += ' AND YEARWEEK(c.datetime, 1) = YEARWEEK(DATE_SUB(CURDATE(), INTERVAL 1 WEEK), 1)'
+      }
+      // if week === 'custom' do nothing here and expect dateFrom/dateTo to be set
+    }
+    if (search) {
+      whereClause += ' AND (u.name LIKE ? OR u.mobile LIKE ?)'
+      params.push(`%${search}%`, `%${search}%`)
+    }
+
+    const minCallsNum = Math.max(parseInt(minCalls, 10) || 1, 1)
+
+    // Weekly aggregation: compute total seconds and calls in last 7 days per creator, then avg per call
+    const baseSubquery = `
+      SELECT
+        u.id,
+        u.name,
+        u.mobile,
+        u.language,
+        u.audio_status,
+        u.video_status,
+        COUNT(c.id) AS total_calls_week,
+        SUM(${durationExpr}) AS total_seconds_week
+      FROM user_calls c
+      INNER JOIN users u ON u.id = c.call_user_id
+      ${whereClause}
+      GROUP BY u.id, u.name, u.mobile, u.language, u.audio_status, u.video_status
+      HAVING total_calls_week >= ?
+    `
+
+    // Count total creators matching filters
+    const [countRows] = await this.pool.query(`SELECT COUNT(*) AS total FROM (${baseSubquery}) as x`, [...params, minCallsNum])
+    const total = (countRows as any[])[0]?.total || 0
+
+    // Fetch page
+    const [rows] = await this.pool.query(
+      `${baseSubquery}
+       ORDER BY ${safeSortBy} ${validSortOrder}
+       LIMIT ? OFFSET ?`,
+      [...params, minCallsNum, limitNum, offset]
+    )
+
+    // Determine number of days in the selected window. If custom dateFrom/dateTo provided, use that range (inclusive).
+    // Otherwise (current/last week) default to 7 days (Mon-Sun)
+    let daysCount = 7
+    if (dateFrom && dateTo) {
+      try {
+        const from = new Date(dateFrom)
+        const to = new Date(dateTo)
+        const diff = Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24))
+        daysCount = Math.max(1, diff + 1)
+      } catch (e) {
+        daysCount = 7
+      }
+    }
+
+    // Compute weekly average as total_seconds_week divided by daysCount (seconds per day)
+    const creators = (rows as any[]).map((r: any) => {
+      const totalSec = Number(r.total_seconds_week || 0)
+      return {
+        ...r,
+        weekly_avg_seconds: daysCount > 0 ? totalSec / daysCount : 0
+      }
+    })
+
+      return {
+        creators,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+          hasNext: pageNum < Math.ceil(total / limitNum),
+          hasPrev: pageNum > 1
+        },
+        filters: { dateFrom, dateTo, minCalls: minCallsNum, search },
+        sorting: { sortBy, sortOrder: validSortOrder }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('getCreatorsWeeklyAvg error:', err instanceof Error ? err.stack || err.message : err)
+      throw err
+    }
+  }
+
   @Get('dashboard-stats')
   async getDashboardQuickStats() {
     // Total users
@@ -719,6 +990,212 @@ export class AdminController {
       todayRegistered,
       todayRegisteredPaid,
       date: new Date().toISOString().slice(0, 10)
+    }
+  }
+
+  @Get('creators-payouts')
+  async getCreatorsPayouts(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+    @Query('sortBy') sortBy: string = 'created_at',
+    @Query('sortOrder') sortOrder: string = 'DESC',
+    @Query('search') search: string = '',
+    @Query('language') language: string = '',
+    @Query('status') status: string = '',
+    @Query('dateFrom') dateFrom: string = '',
+    @Query('dateTo') dateTo: string = '',
+    @Query('distinct') distinct: string = '0'
+  ) {
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1)
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200)
+    const offset = (pageNum - 1) * limitNum
+
+    const validSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+
+    const params: any[] = []
+    let whereClause = 'WHERE 1=1'
+    if (search) {
+      whereClause += ' AND (u.name LIKE ? OR u.mobile LIKE ?)'
+      params.push(`%${search}%`, `%${search}%`)
+    }
+    if (language) {
+      whereClause += ' AND u.language = ?'
+      params.push(language)
+    }
+    if (status !== '') {
+      whereClause += ' AND w.status = ?'
+      params.push(parseInt(status, 10))
+    }
+    if (dateFrom) {
+      whereClause += ' AND DATE(w.created_at) >= ?'
+      params.push(dateFrom)
+    }
+    if (dateTo) {
+      whereClause += ' AND DATE(w.created_at) <= ?'
+      params.push(dateTo)
+    }
+
+    const isDistinct = distinct === '1' || distinct === 'true'
+
+    if (isDistinct) {
+      // Group by user
+      const [countRows] = await this.pool.query(
+        `SELECT COUNT(DISTINCT u.id) as totalUsers
+         FROM withdrawals w
+         INNER JOIN users u ON u.id = w.user_id
+         ${whereClause}`,
+        params
+      )
+      const totalUsers = (countRows as any[])[0]?.totalUsers || 0
+
+      const [rows] = await this.pool.query(
+        `SELECT u.id as user_id, u.name, u.mobile, u.language,
+                COUNT(w.id) as payouts_count, COALESCE(SUM(w.amount),0) as total_amount,
+                MIN(w.created_at) as first_payout_at, MAX(w.created_at) as last_payout_at
+         FROM withdrawals w
+         INNER JOIN users u ON u.id = w.user_id
+         ${whereClause}
+         GROUP BY u.id, u.name, u.mobile, u.language
+         ORDER BY ${sortBy} ${validSortOrder}
+         LIMIT ? OFFSET ?`,
+        [...params, limitNum, offset]
+      )
+
+      // Summary: total payout users and total amount
+      const [sumRow] = await this.pool.query(
+        `SELECT COUNT(DISTINCT w.user_id) as totalUsers, COALESCE(SUM(w.amount),0) as totalAmount
+         FROM withdrawals w
+         INNER JOIN users u ON u.id = w.user_id
+         ${whereClause}`,
+        params
+      )
+
+      const totalAllUsers = (sumRow as any[])[0]?.totalUsers || 0
+      const totalAmount = (sumRow as any[])[0]?.totalAmount || 0
+
+      return {
+        payouts: rows,
+        pagination: { page: pageNum, limit: limitNum, total: totalUsers, totalPages: Math.ceil(totalUsers / limitNum), hasNext: pageNum < Math.ceil(totalUsers / limitNum), hasPrev: pageNum > 1 },
+        filters: { search, language, status, dateFrom, dateTo, distinct },
+        sorting: { sortBy, sortOrder: validSortOrder },
+        summary: { totalUsers, totalAllUsers, totalAmount },
+        languages: await (async () => {
+          const [langs] = await this.pool.query(`SELECT DISTINCT COALESCE(language,'Unknown') as language FROM users ORDER BY language`)
+          return (langs as any[]).map(l => l.language)
+        })()
+      }
+    } else {
+      // Non-distinct: list each withdrawal
+      const [countRows] = await this.pool.query(
+        `SELECT COUNT(*) as total FROM withdrawals w INNER JOIN users u ON u.id = w.user_id ${whereClause}`,
+        params
+      )
+      const total = (countRows as any[])[0]?.total || 0
+
+      const [rows] = await this.pool.query(
+        `SELECT w.id, w.user_id, u.name, u.mobile, COALESCE(u.language,'Unknown') as language, w.amount, w.status, w.created_at
+         FROM withdrawals w
+         INNER JOIN users u ON u.id = w.user_id
+         ${whereClause}
+         ORDER BY ${sortBy} ${validSortOrder}
+         LIMIT ? OFFSET ?`,
+        [...params, limitNum, offset]
+      )
+
+      const [sumRow] = await this.pool.query(
+        `SELECT COUNT(*) as totalPayouts, COALESCE(SUM(amount),0) as totalAmount FROM withdrawals w INNER JOIN users u ON u.id = w.user_id ${whereClause}`,
+        params
+      )
+
+      const totalPayouts = (sumRow as any[])[0]?.totalPayouts || 0
+      const totalAmount = (sumRow as any[])[0]?.totalAmount || 0
+
+      return {
+        payouts: rows,
+        pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum), hasNext: pageNum < Math.ceil(total / limitNum), hasPrev: pageNum > 1 },
+        filters: { search, language, status, dateFrom, dateTo, distinct },
+        sorting: { sortBy, sortOrder: validSortOrder },
+        summary: { totalPayouts, totalAmount },
+        languages: await (async () => {
+          const [langs] = await this.pool.query(`SELECT DISTINCT COALESCE(language,'Unknown') as language FROM users ORDER BY language`)
+          return (langs as any[]).map(l => l.language)
+        })()
+      }
+    }
+  }
+
+  @Get('inactive-creators')
+  async getInactiveCreators(
+    @Query('days') days: string = '7',
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '50',
+    @Query('search') search: string = '',
+    @Query('language') language: string = '',
+    @Query('sortBy') sortBy: string = 'last_call',
+    @Query('sortOrder') sortOrder: string = 'DESC'
+  ) {
+    const allowedDays = new Set(['3','7','15'])
+    const daysVal = allowedDays.has(days) ? parseInt(days, 10) : 7
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1)
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200)
+    const offset = (pageNum - 1) * limitNum
+
+    const validSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+
+    const params: any[] = []
+
+    let where = 'WHERE u.status = 2'
+    if (search) {
+      where += ' AND (u.name LIKE ? OR u.mobile LIKE ?)'
+      params.push(`%${search}%`, `%${search}%`)
+    }
+    if (language) {
+      where += ' AND u.language = ?'
+      params.push(language)
+    }
+
+    // Base grouped query
+    const baseSubquery = `
+      SELECT
+        u.id,
+        u.name,
+        u.mobile,
+        COALESCE(u.language,'Unknown') as language,
+        u.last_audio_time_updated,
+        u.last_video_time_updated,
+        MAX(c.datetime) as last_call
+      FROM users u
+      LEFT JOIN user_calls c ON c.call_user_id = u.id
+      ${where}
+      GROUP BY u.id, u.name, u.mobile, u.language, u.last_audio_time_updated, u.last_video_time_updated
+      HAVING (MAX(c.datetime) IS NULL OR MAX(c.datetime) < DATE_SUB(CURDATE(), INTERVAL ? DAY))
+    `
+
+    // Count
+    const [countRows] = await this.pool.query(`SELECT COUNT(*) as total FROM (${baseSubquery}) as x`, [...params, daysVal])
+    const total = (countRows as any[])[0]?.total || 0
+
+    // Whitelist sort columns and map to real SQL
+    const sortable = new Set(['id','name','mobile','language','last_call','last_audio_time_updated'])
+    const safeSortBy = sortable.has(sortBy) ? sortBy : 'last_call'
+    // For order by, reference the alias names used in the select
+
+    const [rows] = await this.pool.query(
+      `${baseSubquery}
+       ORDER BY ${safeSortBy} ${validSortOrder}
+       LIMIT ? OFFSET ?`,
+      [...params, daysVal, limitNum, offset]
+    )
+
+    // Languages list for filters
+    const [langs] = await this.pool.query(`SELECT DISTINCT COALESCE(language,'Unknown') as language FROM users ORDER BY language`)
+
+    return {
+      creators: rows,
+      pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum), hasNext: pageNum < Math.ceil(total / limitNum), hasPrev: pageNum > 1 },
+      filters: { days: daysVal, search, language },
+      sorting: { sortBy: safeSortBy, sortOrder: validSortOrder },
+      languages: (langs as any[]).map(l => l.language)
     }
   }
 }

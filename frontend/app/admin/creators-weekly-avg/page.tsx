@@ -1,7 +1,6 @@
-'use client'
+"use client"
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, Calendar, Clock, User } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -21,14 +20,12 @@ interface CreatorRow {
   language?: string | null
   audio_status?: number | null
   video_status?: number | null
-  total_calls: number
-  avg_duration_seconds: number
-  total_duration_seconds: number
-  first_call_time: string
-  last_call_time: string
+  total_calls_week: number
+  weekly_avg_seconds: number
+  total_seconds_week: number
 }
 
-export default function CreatorsAvgTimePage() {
+export default function CreatorsWeeklyAvgPage() {
   const [rows, setRows] = useState<CreatorRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,13 +35,14 @@ export default function CreatorsAvgTimePage() {
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
 
-  const [sortBy, setSortBy] = useState('avg_duration_seconds')
+  const [sortBy, setSortBy] = useState('weekly_avg_seconds')
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC')
 
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState(getToday())
   const [dateTo, setDateTo] = useState('')
   const [minCalls, setMinCalls] = useState(1)
+  const [weekSelector, setWeekSelector] = useState<'current'|'last'|'custom'>('current')
 
   const fetchData = async () => {
     try {
@@ -56,12 +54,13 @@ export default function CreatorsAvgTimePage() {
         sortBy,
         sortOrder,
         search,
-        dateFrom,
-        dateTo,
+        dateFrom: weekSelector === 'custom' ? dateFrom : '',
+        dateTo: weekSelector === 'custom' ? dateTo : '',
         minCalls: String(minCalls)
       })
+      if (weekSelector !== 'custom') params.set('week', weekSelector)
       const base = API_BASE || ''
-      const res = await fetch(`${base}/api/admin/creators-avg-call-time?${params.toString()}`)
+      const res = await fetch(`${base}/api/admin/creators-weekly-avg?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setRows(json.creators || [])
@@ -107,36 +106,19 @@ export default function CreatorsAvgTimePage() {
     )
   }
 
-  const SORT_LABELS: Record<string, string> = {
-    id: 'ID',
-    name: 'Creator',
-    mobile: 'Mobile',
-    language: 'Language',
-    audio_status: 'Audio Status',
-    video_status: 'Video Status',
-    total_calls: 'Total Calls',
-    avg_duration_seconds: 'Avg Duration',
-    total_duration_seconds: 'Total Duration (7d)',
-    first_call_time: 'First Call',
-    last_call_time: 'Last Call'
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b">
         <div className="h-1 bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-rose-500" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center"><Clock className="h-6 w-6 mr-2 text-indigo-600"/>Creators by Average Call Time</h1>
-            <Link href="/admin/creators-weekly-avg" className="ml-4 inline-flex items-center px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm">Weekly Avg</Link>
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center"><Clock className="h-6 w-6 mr-2 text-indigo-600"/>Creators Weekly Average Call Time</h1>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Filters */}
         <div className="bg-white border rounded-lg shadow-sm p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
               <div className="relative">
@@ -171,6 +153,14 @@ export default function CreatorsAvgTimePage() {
               <input type="number" min={1} className="px-3 py-2 border rounded-md w-full focus:ring-indigo-500 focus:border-indigo-500"
                      value={minCalls} onChange={(e) => setMinCalls(parseInt(e.target.value || '1', 10))} />
             </div>
+            <div className="md:col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Week</label>
+              <select value={weekSelector} onChange={(e) => setWeekSelector(e.target.value as any)} className="px-3 py-2 border rounded-md w-full">
+                <option value="current">Current (Mon–Sun)</option>
+                <option value="last">Last Week (Mon–Sun)</option>
+                <option value="custom">Custom Range</option>
+              </select>
+            </div>
           </div>
           <div className="mt-4 flex gap-2">
             <button onClick={() => { setPage(1); fetchData() }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">Apply</button>
@@ -183,25 +173,22 @@ export default function CreatorsAvgTimePage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                {Object.entries(SORT_LABELS).map(([key, label]) => (
-                  <th key={key}
-                      onClick={() => handleSort(key)}
-                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                    {label}
-                    {sortBy === key && (
-                      <span className="ml-1 text-[10px] align-middle">{sortOrder === 'ASC' ? '▲' : '▼'}</span>
-                    )}
-                  </th>
-                ))}
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creator</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mobile</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Language</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Calls (Mon–Sun)</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg per day (7d)</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Duration (7d)</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
-                <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={8}>Loading...</td></tr>
+                <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={7}>Loading...</td></tr>
               ) : error ? (
-                <tr><td className="px-3 py-6 text-center text-red-600" colSpan={8}>{error}</td></tr>
+                <tr><td className="px-3 py-6 text-center text-red-600" colSpan={7}>{error}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={8}>No data</td></tr>
+                <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={7}>No data</td></tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50">
@@ -209,13 +196,9 @@ export default function CreatorsAvgTimePage() {
                     <td className="px-3 py-3 text-sm text-gray-900 flex items-center gap-2"><User className="h-4 w-4 text-gray-400"/>{r.name || '-'}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{r.mobile || '-'}</td>
                     <td className="px-3 py-3 text-sm text-gray-900">{r.language || '-'}</td>
-                    <td className="px-3 py-3 text-sm text-gray-900">{renderStatus(r.audio_status)}</td>
-                    <td className="px-3 py-3 text-sm text-gray-900">{renderStatus(r.video_status)}</td>
-                    <td className="px-3 py-3 text-sm text-gray-900">{r.total_calls}</td>
-                    <td className="px-3 py-3 text-sm text-gray-900">{formatDuration(r.avg_duration_seconds)}</td>
-                    <td className="px-3 py-3 text-sm text-gray-900">{formatDuration(r.total_duration_seconds)}</td>
-                    <td className="px-3 py-3 text-xs text-gray-500">{r.first_call_time ? new Date(r.first_call_time).toLocaleString() : '-'}</td>
-                    <td className="px-3 py-3 text-xs text-gray-500">{r.last_call_time ? new Date(r.last_call_time).toLocaleString() : '-'}</td>
+                    <td className="px-3 py-3 text-sm text-gray-900">{r.total_calls_week}</td>
+                    <td className="px-3 py-3 text-sm text-gray-900">{formatDuration(r.weekly_avg_seconds)}</td>
+                    <td className="px-3 py-3 text-sm text-gray-900">{formatDuration(r.total_seconds_week)}</td>
                   </tr>
                 ))
               )}
@@ -237,3 +220,5 @@ export default function CreatorsAvgTimePage() {
     </div>
   )
 }
+
+
