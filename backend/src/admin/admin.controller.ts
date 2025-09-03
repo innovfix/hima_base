@@ -1056,7 +1056,10 @@ export class AdminController {
 
       const [rows] = await this.pool.query(
         `SELECT u.id as user_id, u.name, u.mobile, COALESCE(u.language,'Unknown') as language,
-                COUNT(w.id) as payouts_count, COALESCE(SUM(w.amount),0) as total_amount,
+                -- count only payouts considered "Paid" as payouts_count (handle numeric and string forms)
+                SUM(CASE WHEN w.status = 1 OR w.status = '1' OR LOWER(COALESCE(w.status, '')) = 'paid' THEN 1 ELSE 0 END) as payouts_count,
+                COUNT(w.id) as payouts_total_count,
+                COALESCE(SUM(w.amount),0) as total_amount,
                 MIN(w.created_at) as first_payout_at, MAX(w.created_at) as last_payout_at
          FROM withdrawals w
          INNER JOIN users u ON u.id = w.user_id
