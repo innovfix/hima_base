@@ -20,6 +20,8 @@ const navItems = [
   { href: '/admin/creators-payouts', label: 'Creators Payouts', icon: Wallet },
   { href: '/admin/inactive-creators', label: 'Inactive Creators', icon: Users },
   { href: '/admin/active-users-monitor', label: 'Active Users Monitor', icon: Globe },
+  { href: '/admin/send-report', label: 'Send Daily Report', icon: BarChart3 },
+  { href: '/admin/registrations-paid-by-language', label: 'Regs Paid Today (by language)', icon: Wallet },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

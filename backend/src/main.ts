@@ -1,28 +1,32 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from a .env file if present. Try common locations
+// so this works both when running from src (ts-node) and from dist (compiled).
+const envCandidates = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(__dirname, '..', '.env'),
+  path.resolve(__dirname, '..', '..', '.env'),
+];
+for (const p of envCandidates) {
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p });
+    // eslint-disable-next-line no-console
+    console.log(`Loaded environment from ${p}`);
+    break;
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Enable CORS for frontend (allow multiple ports for development)
+  // Enable CORS for frontend. Allow all origins to simplify cross-host requests from the UI.
+  // In production consider restricting this to trusted origins.
   app.enableCors({
-    origin: (origin, callback) => {
-      const allowed = new Set([
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:3002',
-        'http://localhost:3003',
-        'http://localhost:3004',
-        'http://localhost:3005',
-        process.env.ALLOWED_ORIGIN || '',
-        process.env.NEXT_PUBLIC_APP_ORIGIN || '',
-      ].filter(Boolean));
-      if (!origin || allowed.has(origin)) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
-    },
+    origin: true,
     credentials: true,
   });
   

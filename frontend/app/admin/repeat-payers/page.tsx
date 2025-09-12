@@ -33,7 +33,8 @@ export default function RepeatPayersPage() {
       setLoading(true)
       setError(null)
       const params = new URLSearchParams({ date })
-      const base = API_BASE || ''
+      // Fallback to same host on port 3001 when env base is not provided
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
       const res = await fetch(`${base}/api/admin/repeat-payers-by-time?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()

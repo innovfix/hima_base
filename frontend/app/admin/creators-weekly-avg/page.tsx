@@ -59,7 +59,7 @@ export default function CreatorsWeeklyAvgPage() {
         minCalls: String(minCalls)
       })
       if (weekSelector !== 'custom') params.set('week', weekSelector)
-      const base = API_BASE || ''
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
       const res = await fetch(`${base}/api/admin/creators-weekly-avg?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()

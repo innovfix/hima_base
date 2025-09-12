@@ -78,7 +78,7 @@ export default function CreatorsIncomePage() {
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
 
-      const base = API_BASE || ''
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
       const res = await fetch(`${base}/api/admin/creators-income?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json: ApiResponse = await res.json()

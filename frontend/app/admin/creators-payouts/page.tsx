@@ -47,6 +47,7 @@ export default function CreatorsPayoutsPage() {
   const [dateTo, setDateTo] = useState('')
   const [languages, setLanguages] = useState<string[]>([])
   const [distinct, setDistinct] = useState(false)
+  const [firstTime, setFirstTime] = useState(false)
   const [summary, setSummary] = useState<any>(null)
 
   const fetchData = async () => {
@@ -63,13 +64,20 @@ export default function CreatorsPayoutsPage() {
         status,
         dateFrom,
         dateTo,
-        distinct: distinct ? '1' : '0'
+        distinct: distinct ? '1' : '0',
+        firstTime: firstTime ? '1' : '0'
       })
-      const base = API_BASE || ''
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
       const res = await fetch(`${base}/api/admin/creators-payouts?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      setRows(json.payouts || [])
+      let payload = Array.isArray(json.payouts) ? json.payouts : []
+      // Client-side safety: when first-time is checked in distinct mode,
+      // enforce payouts_count === 1 to avoid any stale-cache or API mis-read.
+      if (distinct && firstTime) {
+        payload = payload.filter((r: any) => String(r?.payouts_count ?? '') === '1')
+      }
+      setRows(payload)
       setTotal(json.pagination?.total || 0)
       setTotalPages(json.pagination?.totalPages || 1)
       if (Array.isArray(json.languages)) setLanguages(json.languages)
@@ -102,6 +110,14 @@ export default function CreatorsPayoutsPage() {
     else if (n === 2) { label = 'Cancelled'; cls = 'bg-yellow-100 text-yellow-800' }
     return (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${cls}`}>{label}</span>
+    )
+  }
+
+  const renderPayoutsBadge = (value: any) => {
+    const n = Number(value || 0)
+    const cls = n === 1 ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'
+    return (
+      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${cls}`}>{n}</span>
     )
   }
 
@@ -196,7 +212,7 @@ export default function CreatorsPayoutsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Distinct users</label>
               <label className="inline-flex items-center gap-2 select-none">
-                <input type="checkbox" className="h-4 w-4" checked={distinct} onChange={(e) => { setPage(1); setDistinct(e.target.checked) }} />
+                <input type="checkbox" className="h-4 w-4" checked={distinct} onChange={(e) => { setPage(1); setDistinct(e.target.checked); fetchData() }} />
                 <span className="text-sm text-gray-700">Group by user</span>
               </label>
             </div>
@@ -225,6 +241,13 @@ export default function CreatorsPayoutsPage() {
                 <option value="1">Paid</option>
                 <option value="2">Cancelled</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">First-time</label>
+              <label className="inline-flex items-center gap-2 select-none">
+                <input type="checkbox" className="h-4 w-4" checked={firstTime} disabled={!distinct} onChange={(e) => { setPage(1); setFirstTime(e.target.checked); fetchData() }} />
+                <span className="text-sm text-gray-700">First-time payers only</span>
+              </label>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
@@ -333,7 +356,7 @@ export default function CreatorsPayoutsPage() {
                         <td className="px-3 py-3 text-sm text-gray-900">{r.name || '-'}</td>
                         <td className="px-3 py-3 text-sm text-gray-900">{r.mobile || '-'}</td>
                         <td className="px-3 py-3 text-sm text-gray-900">{r.language || '-'}</td>
-                        <td className="px-3 py-3 text-sm text-gray-900">{Number(r.payouts_count || 0)}</td>
+                        <td className="px-3 py-3 text-sm text-gray-900">{renderPayoutsBadge(r.payouts_count)}</td>
                         <td className="px-3 py-3 text-sm text-gray-900">{Number(r.total_amount || 0).toFixed(2)}</td>
                         <td className="px-3 py-3 text-xs text-gray-500">{r.last_payout_at ? new Date(r.last_payout_at).toLocaleString() : '-'}</td>
                       </>

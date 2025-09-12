@@ -1,6 +1,9 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Post, Body } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createPool, Pool } from 'mysql2/promise';
+import fetch from 'node-fetch';
+import * as fs from 'fs'
+import * as path from 'path'
 
 @Controller('admin')
 export class AdminController {
@@ -8,7 +11,7 @@ export class AdminController {
 
   constructor(private readonly config: ConfigService) {
     const socketPath = this.config.get<string>('DB_SOCKET') || this.config.get<string>('MYSQL_SOCKET') || undefined;
-    const host = socketPath ? undefined : (this.config.get<string>('DB_HOST') || this.config.get<string>('MYSQL_HOST') || 'localhost');
+    const host = socketPath ? undefined : (this.config.get<string>('yesDB_HOST') || this.config.get<string>('MYSQL_HOST') || 'localhost');
     const port = socketPath ? undefined : parseInt(this.config.get<string>('DB_PORT') || this.config.get<string>('MYSQL_PORT') || '3306', 10);
     const user = this.config.get<string>('DB_USERNAME') || this.config.get<string>('MYSQL_USER');
     const password = this.config.get<string>('DB_PASSWORD') || this.config.get<string>('MYSQL_PASSWORD') || '';
@@ -412,6 +415,21 @@ export class AdminController {
       params
     );
 
+    // Language-wise retention / revenue breakdown per period
+    const [languageTrendsVar] = await this.pool.query(
+      `SELECT
+        ${dateFormat} as date_period,
+        COALESCE(u.language,'Unknown') as language,
+        COUNT(DISTINCT t.user_id) as unique_users,
+        COALESCE(SUM(t.amount),0) as total_revenue
+      FROM transactions t
+      LEFT JOIN users u ON u.id = t.user_id
+      ${whereClause}
+      GROUP BY ${groupByClause}, COALESCE(u.language,'Unknown')
+      ORDER BY ${groupByClause} ASC`,
+      params
+    );
+
     // Get new vs existing user breakdown
     const [newUserData] = await this.pool.query(
       `SELECT
@@ -450,26 +468,56 @@ export class AdminController {
       }
     }
 
+    // Build response payload expected by the frontend
+    const normalizeDate = (v: any): string => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v))
+
+    const trends = (rows as any[]).map((r: any) => ({
+      date_period: normalizeDate(r.date_period),
+      unique_users: Number(r.unique_users || 0),
+      total_transactions: Number(r.total_transactions || 0),
+      total_revenue: Number(r.total_revenue || 0),
+      total_coins_sold: Number(r.total_coins_sold || 0),
+      avg_transaction_value: Number(r.avg_transaction_value || 0),
+    }))
+
+    const retention = (retentionData as any[]).map((r: any) => ({
+      date_period: normalizeDate(r.date_period),
+      total_users: Number(r.total_users || 0),
+      returning_users: Number(r.returning_users || 0),
+      retention_rate: Number(r.retention_rate || 0),
+    }))
+
+    const userBreakdown = (newUserData as any[]).map((r: any) => ({
+      date_period: normalizeDate(r.date_period),
+      new_users: Number(r.new_users || 0),
+      existing_users: Number(r.existing_users || 0),
+    }))
+
+    const languageTrends = (languageTrendsVar as any[]).map((r: any) => ({
+      date_period: normalizeDate(r.date_period),
+      language: r.language || 'Unknown',
+      unique_users: Number(r.unique_users || 0),
+      total_revenue: Number(r.total_revenue || 0),
+    }))
+
+    const summary = {
+      totalPeriods: trends.length,
+      totalUsers: trends.reduce((s: number, x: any) => s + Number(x.unique_users || 0), 0),
+      totalRevenue: trends.reduce((s: number, x: any) => s + Number(x.total_revenue || 0), 0),
+      avgRetentionRate: retention.length
+        ? retention.reduce((s: number, x: any) => s + Number(x.retention_rate || 0), 0) / retention.length
+        : 0,
+    }
+
     return {
-      trends: rows,
-      retention: retentionData,
-      userBreakdown: newUserData,
+      trends,
+      retention,
+      userBreakdown,
+      languageTrends,
       registeredCount,
-      filters: {
-        dateFrom,
-        dateTo,
-        regFrom,
-        regTo,
-        groupBy
-      },
-      summary: {
-        totalPeriods: (rows as any[]).length,
-        totalUsers: (rows as any[]).reduce((sum: number, row: any) => sum + parseInt(row.unique_users || 0), 0),
-        totalRevenue: (rows as any[]).reduce((sum: number, row: any) => sum + parseFloat(row.total_revenue || 0), 0),
-        avgRetentionRate: (retentionData as any[]).length > 0 ? 
-          (retentionData as any[]).reduce((sum: number, row: any) => sum + parseFloat(row.retention_rate || 0), 0) / (retentionData as any[]).length : 0
-      }
-    };
+      filters: { dateFrom, dateTo, groupBy, regFrom, regTo },
+      summary,
+    }
   }
 
   @Get('daily-registrations-vs-payers')
@@ -582,6 +630,91 @@ export class AdminController {
         totalPayers: rows.reduce((s, r) => s + (r.payers || 0), 0)
       }
     };
+  }
+
+  @Get('registrations-paid-by-language')
+  async getRegistrationsPaidByLanguage(
+    @Query('dateFrom') dateFrom: string = '',
+    @Query('dateTo') dateTo: string = ''
+  ) {
+    // Default to today if not provided
+    let startDate = dateFrom || new Date().toISOString().slice(0, 10)
+    let endDate = dateTo || startDate
+
+    // Normalize inputs to DATE strings (assume YYYY-MM-DD)
+    const params: any[] = [startDate, endDate, startDate, endDate]
+
+    // We want language-wise: registrations count, paid users (who made add_coins in same window), and total paid amount
+    const [rows] = await this.pool.query(
+      `SELECT COALESCE(u.language,'Unknown') as language,
+              COUNT(DISTINCT u.id) as registrations,
+              COUNT(DISTINCT CASE WHEN t.id IS NOT NULL THEN u.id END) as paid_users,
+              COALESCE(SUM(t.amount),0) as total_paid
+       FROM users u
+       LEFT JOIN transactions t ON t.user_id = u.id AND t.type = 'add_coins' AND DATE(t.datetime) >= ? AND DATE(t.datetime) <= ?
+       WHERE DATE(u.created_at) >= ? AND DATE(u.created_at) <= ?
+       GROUP BY COALESCE(u.language,'Unknown')
+       ORDER BY registrations DESC`,
+      params
+    )
+
+    const data = (rows as any[]).map(r => ({
+      language: r.language,
+      registrations: Number(r.registrations || 0),
+      paidUsers: Number(r.paid_users || 0),
+      totalPaid: Number(r.total_paid || 0)
+    }))
+
+    return { data, filters: { dateFrom: startDate, dateTo: endDate } }
+  }
+
+  @Get('repeat-payers-by-time')
+  async getRepeatPayersByTime(
+    @Query('date') date: string = ''
+  ) {
+    // Default to today if not provided
+    const targetDate = date || new Date().toISOString().slice(0, 10)
+
+    // For the given date, compute per-hour totals and repeat stats
+    const [rows] = await this.pool.query(
+      `WITH payments AS (
+         SELECT t.user_id,
+                HOUR(t.datetime) as hour,
+                DATE(t.datetime) as d
+         FROM transactions t
+         WHERE t.type = 'add_coins' AND DATE(t.datetime) = ?
+       ),
+       user_counts AS (
+         SELECT user_id, COUNT(*) as cnt
+         FROM payments
+         GROUP BY user_id
+       )
+       SELECT p.hour,
+              COUNT(*) as total_payments,
+              SUM(CASE WHEN uc.cnt > 1 THEN 1 ELSE 0 END) as repeat_payments,
+              COUNT(DISTINCT CASE WHEN uc.cnt > 1 THEN p.user_id END) as repeat_payers
+       FROM payments p
+       JOIN user_counts uc ON uc.user_id = p.user_id
+       GROUP BY p.hour
+       ORDER BY p.hour`,
+      [targetDate]
+    )
+
+    const data = (rows as any[]).map(r => ({
+      hour: Number(r.hour || 0),
+      total_payments: Number(r.total_payments || 0),
+      repeat_payments: Number(r.repeat_payments || 0),
+      repeat_payers: Number(r.repeat_payers || 0)
+    }))
+
+    const summary = data.reduce((acc:any, r:any) => {
+      acc.totalPayments += r.total_payments
+      acc.repeatPayments += r.repeat_payments
+      acc.repeatPayersSet = acc.repeatPayersSet || new Set<number>()
+      return acc
+    }, { totalPayments: 0, repeatPayments: 0 })
+
+    return { data, summary: { totalPayments: summary.totalPayments, repeatPayments: summary.repeatPayments, repeatPayers: 0 }, filters: { date: targetDate } }
   }
 
   @Get('creators-income')
@@ -1004,7 +1137,8 @@ export class AdminController {
     @Query('status') status: string = '',
     @Query('dateFrom') dateFrom: string = '',
     @Query('dateTo') dateTo: string = '',
-    @Query('distinct') distinct: string = '0'
+    @Query('distinct') distinct: string = '0',
+    @Query('firstTime') firstTime: string = '0'
   ) {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1)
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200)
@@ -1027,26 +1161,68 @@ export class AdminController {
       params.push(parseInt(status, 10))
     }
     if (dateFrom) {
-      whereClause += ' AND DATE(w.created_at) >= ?'
+      whereClause += ' AND DATE(w.datetime) >= ?'
       params.push(dateFrom)
     }
     if (dateTo) {
-      whereClause += ' AND DATE(w.created_at) <= ?'
+      whereClause += ' AND DATE(w.datetime) <= ?'
       params.push(dateTo)
     }
 
     const isDistinct = distinct === '1' || distinct === 'true'
+    const onlyFirstTime = firstTime === '1' || firstTime === 'true'
+
+    // Normalize ORDER BY to fully-qualified/alias column names to avoid
+    // ambiguous column errors when joins include columns with the same name
+    // (e.g. `created_at`). We build separate mappings for distinct/grouped
+    // mode and non-distinct mode.
+    const sortableNonDistinct = new Set(['id','user_id','name','mobile','language','amount','status','created_at'])
+    const safeSortByNonDistinct = sortableNonDistinct.has(sortBy) ? sortBy : 'created_at'
+    const orderByColumn = safeSortByNonDistinct === 'id' ? 'w.id'
+      : safeSortByNonDistinct === 'user_id' ? 'w.user_id'
+      : safeSortByNonDistinct === 'name' ? 'u.name'
+      : safeSortByNonDistinct === 'mobile' ? 'u.mobile'
+      : safeSortByNonDistinct === 'language' ? "COALESCE(u.language,'Unknown')"
+      : safeSortByNonDistinct === 'amount' ? 'w.amount'
+      : safeSortByNonDistinct === 'status' ? 'w.status'
+      : 'w.datetime'
+
+    const sortableDistinct = new Set([
+      'user_id', 'name', 'mobile', 'language', 'payouts_count', 'total_amount', 'first_payout_at', 'last_payout_at'
+    ])
+    const safeSortByDistinct = sortableDistinct.has(sortBy) ? sortBy : 'last_payout_at'
+    const orderByDistinct = safeSortByDistinct === 'user_id' ? 'u.id'
+      : safeSortByDistinct === 'name' ? 'u.name'
+      : safeSortByDistinct === 'mobile' ? 'u.mobile'
+      : safeSortByDistinct === 'language' ? "language"
+      : safeSortByDistinct === 'payouts_count' ? 'payouts_count'
+      : safeSortByDistinct === 'total_amount' ? 'total_amount'
+      : safeSortByDistinct === 'first_payout_at' ? 'first_payout_at'
+      : 'last_payout_at'
 
     if (isDistinct) {
-      // Group by user
+      // Group by user (optionally filter only first-time paid users)
+      // We'll join a derived table that contains each user's historical paid withdrawal count
+      // and then filter where that paid count = 1 when onlyFirstTime is requested.
+      const paidHistoryJoin = `LEFT JOIN (
+        SELECT w2.user_id, COUNT(*) AS paid_history_count
+        FROM withdrawals w2
+        WHERE (w2.status = 1 OR w2.status = '1' OR LOWER(COALESCE(w2.status, '')) = 'paid')
+        GROUP BY w2.user_id
+      ) ph ON ph.user_id = u.id`
+      const paidHistoryWhere = onlyFirstTime ? ' AND COALESCE(ph.paid_history_count,0) = 1' : ''
+
+      // Count total users matching the grouped criteria
       const [countRows] = await this.pool.query(
         `SELECT COUNT(DISTINCT u.id) as totalUsers
          FROM withdrawals w
          INNER JOIN users u ON u.id = w.user_id
-         ${whereClause}`,
+         ${paidHistoryJoin}
+         ${whereClause}
+         ${paidHistoryWhere}`,
         params
       )
-      const totalUsers = (countRows as any[])[0]?.totalUsers || 0
+      let totalUsers = (countRows as any[])[0]?.totalUsers || 0
 
       // Whitelist sortable columns for distinct/grouped mode and map to safe SQL aliases
       const sortableDistinct = new Set([
@@ -1054,38 +1230,65 @@ export class AdminController {
       ])
       const safeSortByDistinct = sortableDistinct.has(sortBy) ? sortBy : 'last_payout_at'
 
+      // Build filter for first-time via joined paid-history table
+      // Enforce strictly: (1) the count of paid rows returned in this window = 1
+      // and (2) the user's total paid withdrawals in history = 1 (subquery) to avoid join/alias issues.
+      const havingClause = onlyFirstTime
+        ? `HAVING SUM(CASE WHEN w.status = 1 OR w.status = '1' OR LOWER(COALESCE(w.status, '')) = 'paid' THEN 1 ELSE 0 END) = 1 AND (SELECT COUNT(*) FROM withdrawals w2 WHERE w2.user_id = u.id AND (w2.status = 1 OR w2.status = '1' OR LOWER(COALESCE(w2.status, '')) = 'paid')) = 1`
+        : ''
+
       const [rows] = await this.pool.query(
-        `SELECT u.id as user_id, u.name, u.mobile, COALESCE(u.language,'Unknown') as language,
+        `SELECT u.id as user_id, u.name, u.mobile, COALESCE(u.language,'Unknown') as language, COALESCE(ph.paid_history_count,0) as paid_history_count,
                 -- count only payouts considered "Paid" as payouts_count (handle numeric and string forms)
                 SUM(CASE WHEN w.status = 1 OR w.status = '1' OR LOWER(COALESCE(w.status, '')) = 'paid' THEN 1 ELSE 0 END) as payouts_count,
                 COUNT(w.id) as payouts_total_count,
                 COALESCE(SUM(w.amount),0) as total_amount,
-                MIN(w.created_at) as first_payout_at, MAX(w.created_at) as last_payout_at
+                MIN(w.datetime) as first_payout_at, MAX(w.datetime) as last_payout_at
          FROM withdrawals w
          INNER JOIN users u ON u.id = w.user_id
+         ${paidHistoryJoin}
          ${whereClause}
          GROUP BY u.id, u.name, u.mobile, u.language
-         ORDER BY ${safeSortByDistinct} ${validSortOrder}
+         ${havingClause}
+         ORDER BY ${orderByDistinct} ${validSortOrder}
          LIMIT ? OFFSET ?`,
         [...params, limitNum, offset]
       )
 
-      // Summary: total payout users and total amount
-      const [sumRow] = await this.pool.query(
-        `SELECT COUNT(DISTINCT w.user_id) as totalUsers, COALESCE(SUM(w.amount),0) as totalAmount
-         FROM withdrawals w
-         INNER JOIN users u ON u.id = w.user_id
-         ${whereClause}`,
-        params
-      )
-
-      const totalAllUsers = (sumRow as any[])[0]?.totalUsers || 0
-      const totalAmount = (sumRow as any[])[0]?.totalAmount || 0
+      // Summary: total payout users and total amount (respecting first-time filter)
+      let totalAllUsers = 0
+      let totalAmount = 0
+      if (onlyFirstTime) {
+        const [sumRow] = await this.pool.query(
+          `SELECT COUNT(*) as totalUsers, COALESCE(SUM(total_amount),0) as totalAmount FROM (
+             SELECT u.id, COALESCE(SUM(w.amount),0) as total_amount
+             FROM withdrawals w
+             INNER JOIN users u ON u.id = w.user_id
+             ${paidHistoryJoin}
+             ${whereClause}
+             ${paidHistoryWhere}
+             GROUP BY u.id
+           ) t`,
+          params
+        )
+        totalAllUsers = (sumRow as any[])[0]?.totalUsers || 0
+        totalAmount = (sumRow as any[])[0]?.totalAmount || 0
+      } else {
+        const [sumRow] = await this.pool.query(
+          `SELECT COUNT(DISTINCT w.user_id) as totalUsers, COALESCE(SUM(w.amount),0) as totalAmount
+           FROM withdrawals w
+           INNER JOIN users u ON u.id = w.user_id
+           ${whereClause}`,
+          params
+        )
+        totalAllUsers = (sumRow as any[])[0]?.totalUsers || 0
+        totalAmount = (sumRow as any[])[0]?.totalAmount || 0
+      }
 
       return {
         payouts: rows,
         pagination: { page: pageNum, limit: limitNum, total: totalUsers, totalPages: Math.ceil(totalUsers / limitNum), hasNext: pageNum < Math.ceil(totalUsers / limitNum), hasPrev: pageNum > 1 },
-        filters: { search, language, status, dateFrom, dateTo, distinct },
+        filters: { search, language, status, dateFrom, dateTo, distinct, firstTime: onlyFirstTime ? '1' : '0' },
         sorting: { sortBy, sortOrder: validSortOrder },
         summary: { totalUsers, totalAllUsers, totalAmount },
         languages: await (async () => {
@@ -1102,11 +1305,11 @@ export class AdminController {
       const total = (countRows as any[])[0]?.total || 0
 
       const [rows] = await this.pool.query(
-        `SELECT w.id, w.user_id, u.name, u.mobile, COALESCE(u.language,'Unknown') as language, w.amount, w.status, w.created_at
+        `SELECT w.id, w.user_id, u.name, u.mobile, COALESCE(u.language,'Unknown') as language, w.amount, w.status, w.datetime
          FROM withdrawals w
          INNER JOIN users u ON u.id = w.user_id
          ${whereClause}
-         ORDER BY ${sortBy} ${validSortOrder}
+         ORDER BY ${orderByColumn} ${validSortOrder}
          LIMIT ? OFFSET ?`,
         [...params, limitNum, offset]
       )
@@ -1206,6 +1409,70 @@ export class AdminController {
       sorting: { sortBy: safeSortBy, sortOrder: validSortOrder },
       languages: (langs as any[]).map(l => l.language)
     }
+  }
+
+  @Post('send-daily-report')
+  async sendDailyReport() {
+    // Total collection today (server date)
+    const [totalRows]: any = await this.pool.query(
+      `SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type = 'add_coins' AND DATE(datetime) = CURDATE()`
+    )
+    const total = Number(totalRows[0]?.total || 0)
+
+    // Language-wise breakdown
+    const [langRows]: any = await this.pool.query(
+      `SELECT COALESCE(u.language,'Unknown') as language, COALESCE(SUM(t.amount),0) as total_amount, COUNT(t.id) as transactions_count
+       FROM transactions t
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE t.type = 'add_coins' AND DATE(t.datetime) = CURDATE()
+       GROUP BY COALESCE(u.language,'Unknown') ORDER BY total_amount DESC`
+    )
+
+    const reportLines: string[] = []
+    reportLines.push(`Daily collection report for ${new Date().toISOString().slice(0,10)}`)
+    reportLines.push(`Total collection: ₹${total}`)
+    reportLines.push('By language:');
+    ;(langRows as any[]).forEach((r: any) => {
+      reportLines.push(`- ${r.language}: ₹${Number(r.total_amount||0)} (${r.transactions_count} tx)`)
+    })
+
+    const text = reportLines.join('\n')
+
+    const webhook = this.config.get<string>('SLACK_WEBHOOK_URL') || process.env.SLACK_WEBHOOK_URL
+    if (!webhook) {
+      return { ok: false, message: 'SLACK_WEBHOOK_URL not configured', report: text }
+    }
+
+    try {
+      const res = await fetch(webhook, { method: 'POST', body: JSON.stringify({ text }), headers: { 'Content-Type': 'application/json' } })
+      if (!res.ok) {
+        const body = await res.text()
+        return { ok: false, message: `Slack webhook error: ${res.status} ${res.statusText}`, body }
+      }
+    } catch (err) {
+      return { ok: false, message: 'Failed to call Slack webhook', error: err instanceof Error ? err.message : String(err) }
+    }
+
+    return { ok: true, message: 'Report sent', report: text }
+  }
+
+  @Post('client-error')
+  async reportClientError(@Body() payload: any) {
+    try {
+      // Write to a server-side log so ops can inspect later
+      const logDir = process.cwd()
+      const file = path.join(logDir, 'client-errors.log')
+      const entry = { ts: new Date().toISOString(), payload }
+      fs.appendFile(file, JSON.stringify(entry) + '\n', err => {
+        if (err) console.error('failed to write client error', err)
+      })
+    } catch (err) {
+      // swallow
+      // eslint-disable-next-line no-console
+      console.error('reportClientError error', err)
+    }
+
+    return { ok: true }
   }
 }
 

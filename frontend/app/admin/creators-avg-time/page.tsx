@@ -60,7 +60,7 @@ export default function CreatorsAvgTimePage() {
         dateTo,
         minCalls: String(minCalls)
       })
-      const base = API_BASE || ''
+      const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
       const res = await fetch(`${base}/api/admin/creators-avg-call-time?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
