@@ -28,6 +28,8 @@ export default function CreatorsFtuCallsPage() {
   // Local paging when we need to sort the entire dataset client-side
   const [allRows, setAllRows] = useState<Row[] | null>(null)
   const manualFetchRef = useRef(false)
+  // Minimum FTU calls (unique users) to include per creator
+  const [minCalls, setMinCalls] = useState<number>(10)
 
   const fetchData = async (fetchAll = false, overrideSort?: 'ASC' | 'DESC') => {
     try {
@@ -42,6 +44,7 @@ export default function CreatorsFtuCallsPage() {
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
       if (search) params.set('search', search)
+      params.set('minCalls', String(minCalls))
       // Add cache-busting param to ensure the browser doesn't serve a stale response when toggling sort
       params.set('_', String(Date.now()))
       const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
@@ -81,7 +84,7 @@ export default function CreatorsFtuCallsPage() {
     if (manualFetchRef.current) return
     fetchData(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, dateFrom, dateTo, search, sortOrder])
+  }, [page, limit, dateFrom, dateTo, search, sortOrder, minCalls])
 
   const formatDuration = (seconds: number) => {
     // seconds -> Hh Mm Ss
@@ -119,7 +122,7 @@ export default function CreatorsFtuCallsPage() {
       {showFilters && (
         <div className="bg-white border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
                 <input
@@ -132,6 +135,18 @@ export default function CreatorsFtuCallsPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Min FTU Calls</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={minCalls}
+                  onChange={(e) => { setMinCalls(parseInt(e.target.value, 10) || 0); setPage(1) }}
+                >
+                  {[1,5,10,20,50].map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
                 <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full border rounded px-3 py-2" />
               </div>
@@ -140,7 +155,7 @@ export default function CreatorsFtuCallsPage() {
                 <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full border rounded px-3 py-2" />
               </div>
               <div className="flex items-end">
-                <button onClick={() => { setDateFrom(''); setDateTo(''); setSearch(''); setPage(1); fetchData() }} className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded">Clear</button>
+                <button onClick={() => { setDateFrom(''); setDateTo(''); setSearch(''); setMinCalls(10); setPage(1); fetchData() }} className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded">Clear</button>
               </div>
               <div className="flex items-end">
                 <button onClick={() => { setPage(1); fetchData() }} className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded">Apply</button>
