@@ -1499,7 +1499,8 @@ export class AdminController {
       SELECT fc.creator_id,
              COALESCE(u.name,'') as creator_name,
              COUNT(DISTINCT fc.user_id) AS ftu_calls_count,
-             AVG(${durationExpr}) AS avg_ftu_duration_seconds
+             AVG(${durationExpr}) AS avg_ftu_duration_seconds,
+             CASE WHEN AVG(${durationExpr}) IS NULL OR AVG(${durationExpr}) < 0 THEN 1 ELSE 0 END AS is_invalid
       FROM (${firstCallsSubquery}) fc
       JOIN user_calls c2
         ON c2.call_user_id = fc.creator_id
@@ -1524,7 +1525,7 @@ export class AdminController {
        ) t
        ORDER BY ${
          safeSortBy === 'avg_ftu_duration_seconds'
-           ? `${outerOrderBy} ASC, CAST(t.avg_ftu_duration_seconds AS DECIMAL(20,6)) DESC`
+           ? `t.is_invalid ASC, t.avg_ftu_duration_seconds DESC`
            : `${outerOrderBy} ${safeSortOrder}`
        }, t.ftu_calls_count DESC, t.creator_id ASC
        LIMIT ? OFFSET ?`,
