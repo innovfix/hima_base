@@ -256,7 +256,24 @@ export default function CreatorsFtuCallsPage() {
             <div className="text-sm text-gray-600">Page {page} of {totalPages} · {total} creators</div>
             <div className="flex items-center gap-2">
               <button className="px-3 py-2 border rounded disabled:opacity-50" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>Prev</button>
-              <select value={limit} onChange={(e) => { setLimit(parseInt(e.target.value, 10)); setPage(1) }} className="border rounded px-2 py-2 text-sm">
+              <select
+                value={limit}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10)
+                  setLimit(n)
+                  setPage(1)
+                  if (allRows) {
+                    const start = 0
+                    setRows(allRows.slice(start, start + n))
+                    setTotal(allRows.length)
+                    setTotalPages(Math.max(1, Math.ceil(allRows.length / n)))
+                  } else {
+                    manualFetchRef.current = true
+                    fetchData(false)
+                  }
+                }}
+                className="border rounded px-2 py-2 text-sm"
+              >
                 {[10,20,50,100].map(n => <option key={n} value={n}>{n}/page</option>)}
               </select>
               <button className="px-3 py-2 border rounded disabled:opacity-50" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Next</button>
