@@ -4,7 +4,7 @@
 export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BarChart3, RefreshCw, Filter, SortAsc, SortDesc } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
@@ -27,15 +27,16 @@ export default function CreatorsFtuCallsPage() {
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC')
   // Local paging when we need to sort the entire dataset client-side
   const [allRows, setAllRows] = useState<Row[] | null>(null)
+  const manualFetchRef = useRef(false)
 
-  const fetchData = async (fetchAll = false) => {
+  const fetchData = async (fetchAll = false, overrideSort?: 'ASC' | 'DESC') => {
     try {
       setLoading(true)
       setError(null)
       const params = new URLSearchParams()
       // Request backend ordering by average FTU duration seconds
       params.set('sortBy', 'avg_ftu_duration_seconds')
-      params.set('sortOrder', sortOrder)
+      params.set('sortOrder', overrideSort || sortOrder)
       params.set('page', String(fetchAll ? 1 : page))
       params.set('limit', String(fetchAll ? 100000 : limit))
       if (dateFrom) params.set('dateFrom', dateFrom)
@@ -64,11 +65,21 @@ export default function CreatorsFtuCallsPage() {
       setError(e instanceof Error ? e.message : 'Failed to load data')
     } finally {
       setLoading(false)
+      manualFetchRef.current = false
     }
   }
 
   useEffect(() => {
-    fetchData()
+    // If we already fetched full dataset for sorting, just paginate locally
+    if (allRows && !manualFetchRef.current) {
+      const start = (page - 1) * limit
+      setRows(allRows.slice(start, start + limit))
+      setTotal(allRows.length)
+      setTotalPages(Math.max(1, Math.ceil(allRows.length / limit)))
+      return
+    }
+    if (manualFetchRef.current) return
+    fetchData(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit, dateFrom, dateTo, search, sortOrder])
 
@@ -165,7 +176,8 @@ export default function CreatorsFtuCallsPage() {
                             setPage(1)
                             setSortOrder('ASC')
                             // Fetch all to apply sort across full dataset and locally paginate
-                            fetchData(true)
+                            manualFetchRef.current = true
+                            fetchData(true, 'ASC')
                           }
                         }}
                       >
@@ -179,7 +191,8 @@ export default function CreatorsFtuCallsPage() {
                           if (sortOrder !== 'DESC') {
                             setPage(1)
                             setSortOrder('DESC')
-                            fetchData(true)
+                            manualFetchRef.current = true
+                            fetchData(true, 'DESC')
                           }
                         }}
                       >
