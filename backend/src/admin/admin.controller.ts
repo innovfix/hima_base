@@ -1527,7 +1527,7 @@ export class AdminController {
          safeSortBy === 'avg_ftu_duration_seconds'
            ? `t.is_invalid ASC, t.avg_ftu_duration_seconds ${safeSortOrder}`
            : `${outerOrderBy} ${safeSortOrder}`
-       }, t.ftu_calls_count DESC, t.creator_id ASC
+       }, t.creator_id ASC
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset]
     )
