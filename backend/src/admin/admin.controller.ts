@@ -1478,10 +1478,20 @@ export class AdminController {
     )
     const total = (countRows as any[])[0]?.total || 0
 
-    // Whitelist sortable columns
+    // Whitelist sortable columns and map to safe SQL expressions (use aggregate expressions directly
+    // for ordering to avoid relying on aliases in ORDER BY which can be ambiguous).
     const sortable = new Set(['ftu_calls_count', 'avg_ftu_duration_seconds', 'creator_name', 'creator_id'])
     const safeSortBy = sortable.has(sortBy) ? sortBy : 'avg_ftu_duration_seconds'
     const safeSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+
+    const orderByExpr =
+      safeSortBy === 'avg_ftu_duration_seconds'
+        ? `AVG(${durationExpr})`
+        : safeSortBy === 'ftu_calls_count'
+        ? 'COUNT(DISTINCT fc.user_id)'
+        : safeSortBy === 'creator_name'
+        ? "COALESCE(u.name,'')"
+        : 'fc.creator_id'
 
     // Fetch page of results, include average duration (seconds) for those first calls
     const [rows] = await this.pool.query(
@@ -1497,7 +1507,7 @@ export class AdminController {
        LEFT JOIN users u ON u.id = fc.creator_id
        ${where}
        GROUP BY fc.creator_id, COALESCE(u.name,'')
-       ORDER BY ${safeSortBy} ${safeSortOrder}
+       ORDER BY ${orderByExpr} ${safeSortOrder}
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset]
     )
