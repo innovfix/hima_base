@@ -1493,21 +1493,35 @@ export class AdminController {
         ? "COALESCE(u.name,'')"
         : 'fc.creator_id'
 
-    // Fetch page of results, include average duration (seconds) for those first calls
+    // Build the grouped base query (no final ORDER/LIMIT) and then wrap it so we can ORDER by
+    // computed aggregates reliably.
+    const baseGroupedQuery = `
+      SELECT fc.creator_id,
+             COALESCE(u.name,'') as creator_name,
+             COUNT(DISTINCT fc.user_id) AS ftu_calls_count,
+             AVG(${durationExpr}) AS avg_ftu_duration_seconds
+      FROM (${firstCallsSubquery}) fc
+      JOIN user_calls c2
+        ON c2.call_user_id = fc.creator_id
+       AND c2.user_id = fc.user_id
+       AND c2.datetime = fc.first_dt
+      LEFT JOIN users u ON u.id = fc.creator_id
+      ${where}
+      GROUP BY fc.creator_id, COALESCE(u.name,'')
+    `
+
+    // Map safeSortBy to columns available on the wrapped subquery
+    const outerOrderBy =
+      safeSortBy === 'avg_ftu_duration_seconds' ? 'avg_ftu_duration_seconds'
+        : safeSortBy === 'ftu_calls_count' ? 'ftu_calls_count'
+        : safeSortBy === 'creator_name' ? 'creator_name'
+        : 'creator_id'
+
     const [rows] = await this.pool.query(
-      `SELECT fc.creator_id,
-              COALESCE(u.name,'') as creator_name,
-              COUNT(DISTINCT fc.user_id) AS ftu_calls_count,
-              AVG(${durationExpr}) AS avg_ftu_duration_seconds
-       FROM (${firstCallsSubquery}) fc
-       JOIN user_calls c2
-         ON c2.call_user_id = fc.creator_id
-        AND c2.user_id = fc.user_id
-        AND c2.datetime = fc.first_dt
-       LEFT JOIN users u ON u.id = fc.creator_id
-       ${where}
-       GROUP BY fc.creator_id, COALESCE(u.name,'')
-       ORDER BY ${orderByExpr} ${safeSortOrder}
+      `SELECT * FROM (
+         ${baseGroupedQuery}
+       ) t
+       ORDER BY t.${outerOrderBy} ${safeSortOrder}
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset]
     )
