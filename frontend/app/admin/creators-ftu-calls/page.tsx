@@ -139,7 +139,14 @@ export default function CreatorsFtuCallsPage() {
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={minCalls}
-                  onChange={(e) => { setMinCalls(parseInt(e.target.value, 10) || 0); setPage(1) }}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10) || 0
+                    setMinCalls(v)
+                    setPage(1)
+                    setAllRows(null)
+                    manualFetchRef.current = true
+                    fetchData(false)
+                  }}
                 >
                   {[1,5,10,20,50].map(n => (
                     <option key={n} value={n}>{n}</option>
@@ -155,7 +162,7 @@ export default function CreatorsFtuCallsPage() {
                 <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full border rounded px-3 py-2" />
               </div>
               <div className="flex items-end">
-                <button onClick={() => { setDateFrom(''); setDateTo(''); setSearch(''); setMinCalls(10); setPage(1); fetchData() }} className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded">Clear</button>
+                <button onClick={() => { setDateFrom(''); setDateTo(''); setSearch(''); setMinCalls(10); setPage(1); setAllRows(null); manualFetchRef.current = true; fetchData(false) }} className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded">Clear</button>
               </div>
               <div className="flex items-end">
                 <button onClick={() => { setPage(1); fetchData() }} className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded">Apply</button>
