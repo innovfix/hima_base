@@ -3,16 +3,21 @@ const nextConfig = {
   experimental: {
     // appDir: true, // This is deprecated in Next.js 15
   },
-  // Use a stable buildId to avoid 400s on asset requests due to mismatches
-  generateBuildId: async () => 'build-himabase',
+  // Let Next.js generate a new buildId per build so chunk URLs rotate correctly
   async headers() {
     return [
       {
-        source: '/:path*',
+        source: '/admin/creators-ftu-calls',
         headers: [
           { key: 'Cache-Control', value: 'no-store' },
         ],
       },
+      {
+        source: '/_next/static/chunks/app/admin/creators-ftu-calls/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store' },
+        ],
+      }
     ]
   },
 }

@@ -1,0 +1,22 @@
+nohup: ignoring input
+/usr/lib/node_modules/npm/lib/cli/validate-engines.js:31
+    throw err
+    ^
+
+Error: ENOENT: no such file or directory, uv_cwd
+    at process.wrappedCwd (node:internal/bootstrap/switches/does_own_process_state:144:28)
+    at process.cwd (/usr/lib/node_modules/npm/node_modules/graceful-fs/polyfills.js:10:19)
+    at new Config (/usr/lib/node_modules/npm/node_modules/@npmcli/config/lib/index.js:71:19)
+    at new Npm (/usr/lib/node_modules/npm/lib/npm.js:67:19)
+    at module.exports (/usr/lib/node_modules/npm/lib/cli/entry.js:21:15)
+    at module.exports (/usr/lib/node_modules/npm/lib/cli/validate-engines.js:39:10)
+    at module.exports (/usr/lib/node_modules/npm/lib/cli.js:4:31)
+    at Object.<anonymous> (/usr/lib/node_modules/npm/bin/npm-cli.js:2:25)
+    at Module._compile (node:internal/modules/cjs/loader:1529:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1613:10) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'uv_cwd'
+}
+
+Node.js v20.19.4

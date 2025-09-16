@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BarChart3, RefreshCw, Filter, Search, ChevronLeft, ChevronRight, SortAsc, SortDesc } from 'lucide-react'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
 type SortOrder = 'ASC' | 'DESC'
 

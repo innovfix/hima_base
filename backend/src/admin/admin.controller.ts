@@ -1411,6 +1411,108 @@ export class AdminController {
     }
   }
 
+  @Get('creators-ftu-calls')
+  async getCreatorsFtuCalls(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+    @Query('dateFrom') dateFrom: string = '',
+    @Query('dateTo') dateTo: string = '',
+    @Query('search') search: string = ''
+  ) {
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1)
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200)
+    const offset = (pageNum - 1) * limitNum
+
+    // Derive the first call per (user_id, creator_id) pair using the earliest call datetime
+    // Then count it as FTU only if that first-call row has a non-null end time
+    const firstCallsSubquery = `
+      SELECT c.call_user_id AS creator_id, c.user_id, MIN(c.datetime) AS first_dt
+      FROM user_calls c
+      GROUP BY c.call_user_id, c.user_id
+    `
+
+    const whereClauses: string[] = [
+      '(c2.ended_time IS NOT NULL OR c2.update_current_endedtime IS NOT NULL)'
+    ]
+    const params: any[] = []
+    if (dateFrom) { whereClauses.push('DATE(fc.first_dt) >= ?'); params.push(dateFrom) }
+    if (dateTo) { whereClauses.push('DATE(fc.first_dt) <= ?'); params.push(dateTo) }
+    // Optional search by creator id or name
+    if (search) {
+      const asNumber = parseInt(search, 10)
+      if (!isNaN(asNumber)) {
+        whereClauses.push('(fc.creator_id = ? OR COALESCE(u.name, "") LIKE ?)')
+        params.push(asNumber, `%${search}%`)
+      } else {
+        whereClauses.push('COALESCE(u.name, "") LIKE ?')
+        params.push(`%${search}%`)
+      }
+    }
+    const where = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''
+
+    // Count creators satisfying the criteria
+    const [countRows] = await this.pool.query(
+      `SELECT COUNT(*) AS total FROM (
+         SELECT fc.creator_id
+         FROM (${firstCallsSubquery}) fc
+         JOIN user_calls c2
+           ON c2.call_user_id = fc.creator_id
+          AND c2.user_id = fc.user_id
+          AND c2.datetime = fc.first_dt
+         LEFT JOIN users u ON u.id = fc.creator_id
+         ${where}
+         GROUP BY fc.creator_id
+       ) t`,
+      params
+    )
+    const total = (countRows as any[])[0]?.total || 0
+
+    // Fetch page of results
+    const [rows] = await this.pool.query(
+      `SELECT fc.creator_id, COALESCE(u.name,'') as creator_name, COUNT(DISTINCT fc.user_id) AS ftu_calls_count
+       FROM (${firstCallsSubquery}) fc
+       JOIN user_calls c2
+         ON c2.call_user_id = fc.creator_id
+        AND c2.user_id = fc.user_id
+        AND c2.datetime = fc.first_dt
+       LEFT JOIN users u ON u.id = fc.creator_id
+       ${where}
+       GROUP BY fc.creator_id, COALESCE(u.name,'')
+       ORDER BY ftu_calls_count DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limitNum, offset]
+    )
+
+    // Compute average FTU per day based on provided date range
+    let daysInRange = 1
+    if (dateFrom && dateTo) {
+      const from = new Date(dateFrom)
+      const to = new Date(dateTo)
+      const diffMs = Math.abs(to.getTime() - from.getTime())
+      daysInRange = Math.max(1, Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1)
+    } else if (dateFrom || dateTo) {
+      daysInRange = 1
+    }
+
+    const withAvg = (rows as any[]).map(r => ({
+      ...r,
+      avg_ftu_per_day: Number((Number(r.ftu_calls_count || 0) / daysInRange).toFixed(2))
+    }))
+
+    return {
+      creators: withAvg,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+        hasNext: pageNum < Math.ceil(total / limitNum),
+        hasPrev: pageNum > 1
+      },
+      filters: { dateFrom, dateTo }
+    }
+  }
+
   @Post('send-daily-report')
   async sendDailyReport() {
     // Total collection today (server date)
