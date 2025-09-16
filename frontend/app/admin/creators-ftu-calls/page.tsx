@@ -42,7 +42,15 @@ export default function CreatorsFtuCallsPage() {
       const res = await fetch(`${base}/api/admin/creators-ftu-calls?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      setRows(json.creators || [])
+      // Ensure client-side ordering by average duration (desc) to guarantee UI shows
+      // creators with highest avg duration first even if backend ordering is inconsistent.
+      const creators = (json.creators || []).slice()
+      creators.sort((a: Row, b: Row) => {
+        const avA = typeof a.avg_ftu_duration_seconds === 'number' ? a.avg_ftu_duration_seconds : -Infinity
+        const avB = typeof b.avg_ftu_duration_seconds === 'number' ? b.avg_ftu_duration_seconds : -Infinity
+        return avB - avA
+      })
+      setRows(creators)
       setTotal(json.pagination?.total || 0)
       setTotalPages(json.pagination?.totalPages || 1)
     } catch (e) {
