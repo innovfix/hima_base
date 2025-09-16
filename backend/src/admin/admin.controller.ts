@@ -1512,10 +1512,8 @@ export class AdminController {
 
     // Map safeSortBy to columns available on the wrapped subquery
     const outerOrderBy =
-      safeSortBy === 'avg_ftu_duration_seconds' ?
-        // Push null/negative averages to the bottom when sorting DESC by mapping
-        // them to -1 so they never outrank valid positive values.
-        "CASE WHEN t.avg_ftu_duration_seconds IS NULL OR t.avg_ftu_duration_seconds < 0 THEN -1 ELSE t.avg_ftu_duration_seconds END"
+      safeSortBy === 'avg_ftu_duration_seconds'
+        ? '(t.avg_ftu_duration_seconds < 0 OR t.avg_ftu_duration_seconds IS NULL)'
         : safeSortBy === 'ftu_calls_count' ? 't.ftu_calls_count'
         : safeSortBy === 'creator_name' ? 't.creator_name'
         : 't.creator_id'
@@ -1524,7 +1522,11 @@ export class AdminController {
       `SELECT * FROM (
          ${baseGroupedQuery}
        ) t
-       ORDER BY ${outerOrderBy} ${safeSortOrder}, t.ftu_calls_count DESC, t.creator_id ASC
+       ORDER BY ${
+         safeSortBy === 'avg_ftu_duration_seconds'
+           ? `${outerOrderBy} ASC, CAST(t.avg_ftu_duration_seconds AS DECIMAL(20,6)) DESC`
+           : `${outerOrderBy} ${safeSortOrder}`
+       }, t.ftu_calls_count DESC, t.creator_id ASC
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset]
     )
