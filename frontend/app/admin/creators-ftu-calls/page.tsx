@@ -61,8 +61,10 @@ export default function CreatorsFtuCallsPage() {
       } else {
         setAllRows(null)
         setRows(list)
-        setTotal(json.pagination?.total || list.length || 0)
-        setTotalPages(json.pagination?.totalPages || Math.max(1, Math.ceil((list.length || 0) / limit)))
+        const totalCount = Number(json.pagination?.total || 0) || list.length || 0
+        setTotal(totalCount)
+        // Always compute totalPages on the client using the current limit to avoid mismatches
+        setTotalPages(Math.max(1, Math.ceil(totalCount / limit)))
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load data')
