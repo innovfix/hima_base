@@ -264,15 +264,10 @@ export default function CreatorsFtuCallsPage() {
                   const n = parseInt(e.target.value, 10)
                   setLimit(n)
                   setPage(1)
-                  if (allRows) {
-                    const start = 0
-                    setRows(allRows.slice(start, start + n))
-                    setTotal(allRows.length)
-                    setTotalPages(Math.max(1, Math.ceil(allRows.length / n)))
-                  } else {
-                    manualFetchRef.current = true
-                    fetchData(false)
-                  }
+                  // Always refetch from server for page-size changes to keep counts/pages consistent
+                  setAllRows(null)
+                  manualFetchRef.current = true
+                  fetchData(false)
                 }}
                 className="border rounded px-2 py-2 text-sm"
               >
