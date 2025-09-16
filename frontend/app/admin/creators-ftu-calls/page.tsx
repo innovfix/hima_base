@@ -5,7 +5,7 @@ export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { BarChart3, RefreshCw, Filter } from 'lucide-react'
+import { BarChart3, RefreshCw, Filter, SortAsc, SortDesc } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -23,16 +23,17 @@ export default function CreatorsFtuCallsPage() {
   const [dateTo, setDateTo] = useState('')
   const [search, setSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  // Sorting: default to Avg Duration DESC
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC')
 
   const fetchData = async () => {
     try {
       setLoading(true)
       setError(null)
       const params = new URLSearchParams()
-      // Always request sorting by average FTU duration (seconds) desc so list shows creators with
-      // highest average duration first.
+      // Request backend ordering by average FTU duration seconds
       params.set('sortBy', 'avg_ftu_duration_seconds')
-      params.set('sortOrder', 'DESC')
+      params.set('sortOrder', sortOrder)
       params.set('page', String(page))
       params.set('limit', String(limit))
       if (dateFrom) params.set('dateFrom', dateFrom)
@@ -42,19 +43,18 @@ export default function CreatorsFtuCallsPage() {
       const res = await fetch(`${base}/api/admin/creators-ftu-calls?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      // Force deterministic client-side order: valid durations first, then highest avg duration,
-      // then tie-break by calls desc and creator id asc.
       const creators: Row[] = (json.creators || []).slice()
+      // Client-side stable fallback to ensure expected order even if backend differs
       creators.sort((a: any, b: any) => {
         const aAvg = Number(a?.avg_ftu_duration_seconds ?? -1)
         const bAvg = Number(b?.avg_ftu_duration_seconds ?? -1)
         const aInvalid = aAvg <= 0 ? 1 : 0
         const bInvalid = bAvg <= 0 ? 1 : 0
-        if (aInvalid !== bInvalid) return aInvalid - bInvalid // valid first
-        if (bAvg !== aAvg) return bAvg - aAvg // higher first
+        if (aInvalid !== bInvalid) return aInvalid - bInvalid
+        if (aAvg !== bAvg) return sortOrder === 'DESC' ? bAvg - aAvg : aAvg - bAvg
         const aCalls = Number(a?.ftu_calls_count ?? 0)
         const bCalls = Number(b?.ftu_calls_count ?? 0)
-        if (bCalls !== aCalls) return bCalls - aCalls
+        if (aCalls !== bCalls) return bCalls - aCalls
         return Number(a?.creator_id ?? 0) - Number(b?.creator_id ?? 0)
       })
       setRows(creators)
@@ -70,7 +70,7 @@ export default function CreatorsFtuCallsPage() {
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, dateFrom, dateTo, search])
+  }, [page, limit, dateFrom, dateTo, search, sortOrder])
 
   const formatDuration = (seconds: number) => {
     // seconds -> Hh Mm Ss
@@ -153,7 +153,27 @@ export default function CreatorsFtuCallsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creator</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FTU Calls Count</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg FTU/Day</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Duration</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <span>Avg Duration</span>
+                      <button
+                        type="button"
+                        aria-label="Sort ascending"
+                        className={`p-1 rounded ${sortOrder === 'ASC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => { if (sortOrder !== 'ASC') { setPage(1); setSortOrder('ASC') } }}
+                      >
+                        <SortAsc className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Sort descending"
+                        className={`p-1 rounded ${sortOrder === 'DESC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => { if (sortOrder !== 'DESC') { setPage(1); setSortOrder('DESC') } }}
+                      >
+                        <SortDesc className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
