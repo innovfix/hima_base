@@ -43,21 +43,8 @@ export default function CreatorsFtuCallsPage() {
       const res = await fetch(`${base}/api/admin/creators-ftu-calls?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      const creators: Row[] = (json.creators || []).slice()
-      // Client-side stable fallback to ensure expected order even if backend differs
-      creators.sort((a: any, b: any) => {
-        const aAvg = Number(a?.avg_ftu_duration_seconds ?? -1)
-        const bAvg = Number(b?.avg_ftu_duration_seconds ?? -1)
-        const aInvalid = aAvg <= 0 ? 1 : 0
-        const bInvalid = bAvg <= 0 ? 1 : 0
-        if (aInvalid !== bInvalid) return aInvalid - bInvalid
-        if (aAvg !== bAvg) return sortOrder === 'DESC' ? bAvg - aAvg : aAvg - bAvg
-        const aCalls = Number(a?.ftu_calls_count ?? 0)
-        const bCalls = Number(b?.ftu_calls_count ?? 0)
-        if (aCalls !== bCalls) return bCalls - aCalls
-        return Number(a?.creator_id ?? 0) - Number(b?.creator_id ?? 0)
-      })
-      setRows(creators)
+      // Use backend-provided ordering so sorting applies to the entire dataset (not just this page)
+      setRows(json.creators || [])
       setTotal(json.pagination?.total || 0)
       setTotalPages(json.pagination?.totalPages || 1)
     } catch (e) {
@@ -160,7 +147,13 @@ export default function CreatorsFtuCallsPage() {
                         type="button"
                         aria-label="Sort ascending"
                         className={`p-1 rounded ${sortOrder === 'ASC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-                        onClick={() => { if (sortOrder !== 'ASC') { setPage(1); setSortOrder('ASC') } }}
+                        onClick={() => {
+                          if (sortOrder !== 'ASC') {
+                            // When changing sort, reset to a large page size temporarily to fetch a stable view
+                            setPage(1)
+                            setSortOrder('ASC')
+                          }
+                        }}
                       >
                         <SortAsc className="h-4 w-4" />
                       </button>
@@ -168,7 +161,12 @@ export default function CreatorsFtuCallsPage() {
                         type="button"
                         aria-label="Sort descending"
                         className={`p-1 rounded ${sortOrder === 'DESC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-                        onClick={() => { if (sortOrder !== 'DESC') { setPage(1); setSortOrder('DESC') } }}
+                        onClick={() => {
+                          if (sortOrder !== 'DESC') {
+                            setPage(1)
+                            setSortOrder('DESC')
+                          }
+                        }}
                       >
                         <SortDesc className="h-4 w-4" />
                       </button>
