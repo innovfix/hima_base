@@ -1419,7 +1419,8 @@ export class AdminController {
     @Query('sortOrder') sortOrder: string = 'DESC',
     @Query('dateFrom') dateFrom: string = '',
     @Query('dateTo') dateTo: string = '',
-    @Query('search') search: string = ''
+    @Query('search') search: string = '',
+    @Query('minCalls') minCalls: string = '10'
   ) {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1)
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200)
@@ -1509,6 +1510,7 @@ export class AdminController {
       LEFT JOIN users u ON u.id = fc.creator_id
       ${where}
       GROUP BY fc.creator_id, COALESCE(u.name,'')
+      HAVING COUNT(DISTINCT fc.user_id) >= ?
     `
 
     // Map safeSortBy to columns available on the wrapped subquery
@@ -1518,6 +1520,8 @@ export class AdminController {
         : safeSortBy === 'ftu_calls_count' ? 't.ftu_calls_count'
         : safeSortBy === 'creator_name' ? 't.creator_name'
         : 't.creator_id'
+
+    const minCallsNum = Math.max(parseInt(minCalls, 10) || 10, 0)
 
     const [rows] = await this.pool.query(
       `SELECT * FROM (
@@ -1529,7 +1533,7 @@ export class AdminController {
            : `${outerOrderBy} ${safeSortOrder}`
        }, t.creator_id ASC
        LIMIT ? OFFSET ?`,
-      [...params, limitNum, offset]
+      [...params, minCallsNum, limitNum, offset]
     )
 
     // Compute average FTU per day based on provided date range
@@ -1559,7 +1563,7 @@ export class AdminController {
         hasNext: pageNum < Math.ceil(total / limitNum),
         hasPrev: pageNum > 1
       },
-      filters: { dateFrom, dateTo }
+      filters: { dateFrom, dateTo, minCalls: minCallsNum }
     }
   }
 
