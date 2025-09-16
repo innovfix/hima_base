@@ -1415,6 +1415,8 @@ export class AdminController {
   async getCreatorsFtuCalls(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
+    @Query('sortBy') sortBy: string = 'avg_ftu_duration_seconds',
+    @Query('sortOrder') sortOrder: string = 'DESC',
     @Query('dateFrom') dateFrom: string = '',
     @Query('dateTo') dateTo: string = '',
     @Query('search') search: string = ''
@@ -1476,6 +1478,11 @@ export class AdminController {
     )
     const total = (countRows as any[])[0]?.total || 0
 
+    // Whitelist sortable columns
+    const sortable = new Set(['ftu_calls_count', 'avg_ftu_duration_seconds', 'creator_name', 'creator_id'])
+    const safeSortBy = sortable.has(sortBy) ? sortBy : 'avg_ftu_duration_seconds'
+    const safeSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+
     // Fetch page of results, include average duration (seconds) for those first calls
     const [rows] = await this.pool.query(
       `SELECT fc.creator_id,
@@ -1490,7 +1497,7 @@ export class AdminController {
        LEFT JOIN users u ON u.id = fc.creator_id
        ${where}
        GROUP BY fc.creator_id, COALESCE(u.name,'')
-       ORDER BY ftu_calls_count DESC
+       ORDER BY ${safeSortBy} ${safeSortOrder}
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset]
     )
