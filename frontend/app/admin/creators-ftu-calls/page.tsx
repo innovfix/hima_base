@@ -150,7 +150,19 @@ export default function CreatorsFtuCallsPage() {
                     <td className="px-4 py-2 text-sm text-gray-900">{r.creator_name || '-'}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{r.ftu_calls_count}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{typeof r.avg_ftu_per_day === 'number' ? r.avg_ftu_per_day.toFixed(2) : '-'}</td>
-                    <td className="px-4 py-2 text-sm text-gray-900">{typeof r.avg_ftu_duration_seconds === 'number' && r.avg_ftu_duration_seconds > 0 ? formatDuration(r.avg_ftu_duration_seconds) : '-'}</td>
+                    <td className="px-4 py-2 text-sm">
+                      {typeof r.avg_ftu_duration_seconds === 'number' ? (
+                        r.avg_ftu_duration_seconds < 0 ? (
+                          <span className="px-2 py-1 text-sm text-red-700 bg-red-100 rounded">{formatDuration(Math.abs(r.avg_ftu_duration_seconds))} (neg)</span>
+                        ) : r.avg_ftu_duration_seconds > 0 ? (
+                          <span className="px-2 py-1 text-sm text-gray-900">{formatDuration(r.avg_ftu_duration_seconds)}</span>
+                        ) : (
+                          '-'
+                        )
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
