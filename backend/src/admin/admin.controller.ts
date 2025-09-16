@@ -1550,6 +1550,7 @@ export class AdminController {
 
     const withAvg = (rows as any[]).map(r => ({
       ...r,
+      language: r.language || 'Unknown',
       avg_ftu_per_day: Number((Number(r.ftu_calls_count || 0) / daysInRange).toFixed(2)),
       avg_ftu_duration_seconds: Number(r.avg_ftu_duration_seconds || 0)
     }))
