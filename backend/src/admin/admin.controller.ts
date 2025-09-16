@@ -1516,15 +1516,15 @@ export class AdminController {
         // Push null/negative averages to the bottom when sorting DESC by mapping
         // them to -1 so they never outrank valid positive values.
         "CASE WHEN t.avg_ftu_duration_seconds IS NULL OR t.avg_ftu_duration_seconds < 0 THEN -1 ELSE t.avg_ftu_duration_seconds END"
-        : safeSortBy === 'ftu_calls_count' ? 'ftu_calls_count'
-        : safeSortBy === 'creator_name' ? 'creator_name'
-        : 'creator_id'
+        : safeSortBy === 'ftu_calls_count' ? 't.ftu_calls_count'
+        : safeSortBy === 'creator_name' ? 't.creator_name'
+        : 't.creator_id'
 
     const [rows] = await this.pool.query(
       `SELECT * FROM (
          ${baseGroupedQuery}
        ) t
-       ORDER BY t.${outerOrderBy} ${safeSortOrder}, t.ftu_calls_count DESC, t.creator_id ASC
+       ORDER BY ${outerOrderBy} ${safeSortOrder}, t.ftu_calls_count DESC, t.creator_id ASC
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset]
     )
