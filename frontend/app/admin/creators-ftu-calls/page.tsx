@@ -39,6 +39,8 @@ export default function CreatorsFtuCallsPage() {
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
       if (search) params.set('search', search)
+      // Add cache-busting param to ensure the browser doesn't serve a stale response when toggling sort
+      params.set('_', String(Date.now()))
       const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
       const res = await fetch(`${base}/api/admin/creators-ftu-calls?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
