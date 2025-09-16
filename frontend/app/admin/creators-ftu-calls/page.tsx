@@ -29,6 +29,10 @@ export default function CreatorsFtuCallsPage() {
       setLoading(true)
       setError(null)
       const params = new URLSearchParams()
+      // Always request sorting by average FTU duration (seconds) desc so list shows creators with
+      // highest average duration first.
+      params.set('sortBy', 'avg_ftu_duration_seconds')
+      params.set('sortOrder', 'DESC')
       params.set('page', String(page))
       params.set('limit', String(limit))
       if (dateFrom) params.set('dateFrom', dateFrom)
