@@ -1512,7 +1512,10 @@ export class AdminController {
 
     // Map safeSortBy to columns available on the wrapped subquery
     const outerOrderBy =
-      safeSortBy === 'avg_ftu_duration_seconds' ? 'avg_ftu_duration_seconds'
+      safeSortBy === 'avg_ftu_duration_seconds' ?
+        // Push null/negative averages to the bottom when sorting DESC by mapping
+        // them to -1 so they never outrank valid positive values.
+        "CASE WHEN t.avg_ftu_duration_seconds IS NULL OR t.avg_ftu_duration_seconds < 0 THEN -1 ELSE t.avg_ftu_duration_seconds END"
         : safeSortBy === 'ftu_calls_count' ? 'ftu_calls_count'
         : safeSortBy === 'creator_name' ? 'creator_name'
         : 'creator_id'
