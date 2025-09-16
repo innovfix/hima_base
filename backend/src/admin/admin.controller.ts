@@ -1521,7 +1521,7 @@ export class AdminController {
       `SELECT * FROM (
          ${baseGroupedQuery}
        ) t
-       ORDER BY t.${outerOrderBy} ${safeSortOrder}
+       ORDER BY t.${outerOrderBy} ${safeSortOrder}, t.ftu_calls_count DESC, t.creator_id ASC
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset]
     )
