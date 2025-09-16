@@ -1431,6 +1431,15 @@ export class AdminController {
       GROUP BY c.call_user_id, c.user_id
     `
 
+    // Duration expression for the selected first-call row (c2)
+    const durationExpr = `
+      CASE 
+        WHEN c2.started_time IS NOT NULL AND c2.ended_time IS NOT NULL THEN TIME_TO_SEC(TIMEDIFF(c2.ended_time, c2.started_time))
+        WHEN c2.datetime IS NOT NULL AND c2.update_current_endedtime IS NOT NULL THEN TIMESTAMPDIFF(SECOND, c2.datetime, c2.update_current_endedtime)
+        ELSE NULL
+      END
+    `
+
     const whereClauses: string[] = [
       '(c2.ended_time IS NOT NULL OR c2.update_current_endedtime IS NOT NULL)'
     ]
@@ -1467,9 +1476,12 @@ export class AdminController {
     )
     const total = (countRows as any[])[0]?.total || 0
 
-    // Fetch page of results
+    // Fetch page of results, include average duration (seconds) for those first calls
     const [rows] = await this.pool.query(
-      `SELECT fc.creator_id, COALESCE(u.name,'') as creator_name, COUNT(DISTINCT fc.user_id) AS ftu_calls_count
+      `SELECT fc.creator_id,
+              COALESCE(u.name,'') as creator_name,
+              COUNT(DISTINCT fc.user_id) AS ftu_calls_count,
+              AVG(${durationExpr}) AS avg_ftu_duration_seconds
        FROM (${firstCallsSubquery}) fc
        JOIN user_calls c2
          ON c2.call_user_id = fc.creator_id
@@ -1496,7 +1508,8 @@ export class AdminController {
 
     const withAvg = (rows as any[]).map(r => ({
       ...r,
-      avg_ftu_per_day: Number((Number(r.ftu_calls_count || 0) / daysInRange).toFixed(2))
+      avg_ftu_per_day: Number((Number(r.ftu_calls_count || 0) / daysInRange).toFixed(2)),
+      avg_ftu_duration_seconds: Number(r.avg_ftu_duration_seconds || 0)
     }))
 
     return {

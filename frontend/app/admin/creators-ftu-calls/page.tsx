@@ -9,7 +9,7 @@ import { BarChart3, RefreshCw, Filter } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
-type Row = { creator_id: number; creator_name?: string; ftu_calls_count: number; avg_ftu_per_day?: number }
+type Row = { creator_id: number; creator_name?: string; ftu_calls_count: number; avg_ftu_per_day?: number; avg_ftu_duration_seconds?: number }
 
 export default function CreatorsFtuCallsPage() {
   const [rows, setRows] = useState<Row[]>([])
@@ -52,6 +52,18 @@ export default function CreatorsFtuCallsPage() {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit])
+
+  const formatDuration = (seconds: number) => {
+    // seconds -> Hh Mm Ss
+    const s = Math.floor(seconds)
+    if (!s || s <= 0) return '-' 
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+    if (h > 0) return `${h}h ${m}m ${sec}s`
+    if (m > 0) return `${m}m ${sec}s`
+    return `${sec}s`
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -122,6 +134,7 @@ export default function CreatorsFtuCallsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creator</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FTU Calls Count</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg FTU/Day</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Duration</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -133,6 +146,7 @@ export default function CreatorsFtuCallsPage() {
                     <td className="px-4 py-2 text-sm text-gray-900">{r.creator_name || '-'}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{r.ftu_calls_count}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{typeof r.avg_ftu_per_day === 'number' ? r.avg_ftu_per_day.toFixed(2) : '-'}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{typeof r.avg_ftu_duration_seconds === 'number' && r.avg_ftu_duration_seconds > 0 ? formatDuration(r.avg_ftu_duration_seconds) : '-'}</td>
                   </tr>
                 ))}
               </tbody>

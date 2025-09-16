@@ -1,0 +1,33 @@
+
+> analytics-frontend@0.1.0 dev
+> next dev
+
+  ▲ Next.js 15.0.0
+  - Local:        http://localhost:3002
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1760ms
+ ○ Compiling /admin/creators-ftu-calls ...
+ ✓ Compiled /admin/creators-ftu-calls in 3s (642 modules)
+ ✓ Compiled in 290ms (314 modules)
+ GET /admin/creators-ftu-calls 200 in 3378ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 725ms (622 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 779ms
+ GET /admin/creators-ftu-calls 200 in 88ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 68ms
+ GET /admin/creators-ftu-calls 200 in 60ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 41ms
+ ○ Compiling /admin/creators-payouts ...
+ ✓ Compiled /admin/creators-payouts in 608ms (636 modules)
+ GET /admin/creators-payouts 200 in 654ms
+ GET /admin/creators-ftu-calls 200 in 19ms
+ ✓ Compiled in 537ms (639 modules)
+ GET /admin/creators-ftu-calls 200 in 49ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/creators-ftu-calls 200 in 65ms
+ ✓ Compiled in 240ms (639 modules)
+ GET /admin/creators-ftu-calls 200 in 31ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/creators-ftu-calls 200 in 53ms
