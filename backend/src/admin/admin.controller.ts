@@ -1420,7 +1420,8 @@ export class AdminController {
     @Query('dateFrom') dateFrom: string = '',
     @Query('dateTo') dateTo: string = '',
     @Query('search') search: string = '',
-    @Query('minCalls') minCalls: string = '10'
+    @Query('minCalls') minCalls: string = '10',
+    @Query('language') language: string = ''
   ) {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1)
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200)
@@ -1460,9 +1461,32 @@ export class AdminController {
         params.push(`%${search}%`)
       }
     }
+    // Optional language filter using users.language (treat NULL as 'Unknown')
+    if (language && language.toLowerCase() !== 'all') {
+      whereClauses.push("COALESCE(u.language,'Unknown') = ?")
+      params.push(language)
+    }
     const where = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''
 
-    // Count creators satisfying the criteria
+    // Repeat callers (users with >= 2 calls to the same creator within the filtered date range)
+    const repeatWhere: string[] = []
+    const repeatParams: any[] = []
+    if (dateFrom) { repeatWhere.push('DATE(c.datetime) >= ?'); repeatParams.push(dateFrom) }
+    if (dateTo) { repeatWhere.push('DATE(c.datetime) <= ?'); repeatParams.push(dateTo) }
+    const repeatFilter = repeatWhere.length ? `WHERE ${repeatWhere.join(' AND ')}` : ''
+    const repeatCallersSubquery = `
+      SELECT r.creator_id, COUNT(*) AS repeat_callers_count
+      FROM (
+        SELECT c.call_user_id AS creator_id, c.user_id
+        FROM user_calls c
+        ${repeatFilter}
+        GROUP BY c.call_user_id, c.user_id
+        HAVING COUNT(*) >= 2
+      ) r
+      GROUP BY r.creator_id
+    `
+
+    // Count creators satisfying the criteria (including the same HAVING minCalls filter)
     const [countRows] = await this.pool.query(
       `SELECT COUNT(*) AS total FROM (
          SELECT fc.creator_id
@@ -1474,14 +1498,15 @@ export class AdminController {
          LEFT JOIN users u ON u.id = fc.creator_id
          ${where}
          GROUP BY fc.creator_id
+         HAVING COUNT(DISTINCT fc.user_id) >= ?
        ) t`,
-      params
+      [...params, Math.max(parseInt(minCalls, 10) || 10, 0)]
     )
     const total = (countRows as any[])[0]?.total || 0
 
     // Whitelist sortable columns and map to safe SQL expressions (use aggregate expressions directly
     // for ordering to avoid relying on aliases in ORDER BY which can be ambiguous).
-    const sortable = new Set(['ftu_calls_count', 'avg_ftu_duration_seconds', 'creator_name', 'creator_id'])
+    const sortable = new Set(['ftu_calls_count', 'avg_ftu_duration_seconds', 'repeat_callers_count', 'creator_name', 'creator_id'])
     const safeSortBy = sortable.has(sortBy) ? sortBy : 'avg_ftu_duration_seconds'
     const safeSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
 
@@ -1502,6 +1527,7 @@ export class AdminController {
              COALESCE(u.language,'Unknown') as language,
              COUNT(DISTINCT fc.user_id) AS ftu_calls_count,
              AVG(${durationExpr}) AS avg_ftu_duration_seconds,
+             COALESCE(MAX(r.repeat_callers_count), 0) AS repeat_callers_count,
              CASE WHEN AVG(${durationExpr}) IS NULL OR AVG(${durationExpr}) < 0 THEN 1 ELSE 0 END AS is_invalid
       FROM (${firstCallsSubquery}) fc
       JOIN user_calls c2
@@ -1509,6 +1535,7 @@ export class AdminController {
        AND c2.user_id = fc.user_id
        AND c2.datetime = fc.first_dt
       LEFT JOIN users u ON u.id = fc.creator_id
+      LEFT JOIN (${repeatCallersSubquery}) r ON r.creator_id = fc.creator_id
       ${where}
       GROUP BY fc.creator_id, COALESCE(u.name,''), COALESCE(u.language,'Unknown')
       HAVING COUNT(DISTINCT fc.user_id) >= ?
@@ -1519,6 +1546,7 @@ export class AdminController {
       safeSortBy === 'avg_ftu_duration_seconds'
         ? '(t.avg_ftu_duration_seconds < 0 OR t.avg_ftu_duration_seconds IS NULL)'
         : safeSortBy === 'ftu_calls_count' ? 't.ftu_calls_count'
+        : safeSortBy === 'repeat_callers_count' ? 't.repeat_callers_count'
         : safeSortBy === 'creator_name' ? 't.creator_name'
         : 't.creator_id'
 
@@ -1534,7 +1562,7 @@ export class AdminController {
            : `${outerOrderBy} ${safeSortOrder}`
        }, t.creator_id ASC
        LIMIT ? OFFSET ?`,
-      [...params, minCallsNum, limitNum, offset]
+      [...params, ...repeatParams, minCallsNum, limitNum, offset]
     )
 
     // Compute average FTU per day based on provided date range
@@ -1552,8 +1580,12 @@ export class AdminController {
       ...r,
       language: r.language || 'Unknown',
       avg_ftu_per_day: Number((Number(r.ftu_calls_count || 0) / daysInRange).toFixed(2)),
-      avg_ftu_duration_seconds: Number(r.avg_ftu_duration_seconds || 0)
+      avg_ftu_duration_seconds: Number(r.avg_ftu_duration_seconds || 0),
+      repeat_callers_count: Number(r.repeat_callers_count || 0)
     }))
+
+    // Languages list for filter dropdown
+    const [langs] = await this.pool.query(`SELECT DISTINCT COALESCE(language,'Unknown') as language FROM users ORDER BY language`)
 
     return {
       creators: withAvg,
@@ -1565,7 +1597,8 @@ export class AdminController {
         hasNext: pageNum < Math.ceil(total / limitNum),
         hasPrev: pageNum > 1
       },
-      filters: { dateFrom, dateTo, minCalls: minCallsNum }
+      filters: { dateFrom, dateTo, minCalls: minCallsNum, language },
+      languages: (langs as any[]).map((l: any) => l.language)
     }
   }
 

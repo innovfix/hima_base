@@ -3,31 +3,71 @@
 > next dev
 
   ▲ Next.js 15.0.0
-  - Local:        http://localhost:3002
+  - Local:        http://localhost:3000
   - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 1760ms
+ ✓ Ready in 1445ms
  ○ Compiling /admin/creators-ftu-calls ...
- ✓ Compiled /admin/creators-ftu-calls in 3s (642 modules)
- ✓ Compiled in 290ms (314 modules)
- GET /admin/creators-ftu-calls 200 in 3378ms
- ○ Compiling /_not-found ...
- ✓ Compiled /_not-found in 725ms (622 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 779ms
- GET /admin/creators-ftu-calls 200 in 88ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 68ms
- GET /admin/creators-ftu-calls 200 in 60ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 41ms
- ○ Compiling /admin/creators-payouts ...
- ✓ Compiled /admin/creators-payouts in 608ms (636 modules)
- GET /admin/creators-payouts 200 in 654ms
- GET /admin/creators-ftu-calls 200 in 19ms
- ✓ Compiled in 537ms (639 modules)
+ ✓ Compiled /admin/creators-ftu-calls in 3.2s (646 modules)
+ GET /admin/creators-ftu-calls 200 in 3400ms
+ ✓ Compiled in 116ms (316 modules)
+ GET /admin/creators-ftu-calls 200 in 52ms
+ ✓ Compiled in 770ms (637 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/creators-ftu-calls 200 in 176ms
+ GET /admin/creators-ftu-calls 200 in 135ms
+ ✓ Compiled in 581ms (637 modules)
+ GET /admin/creators-ftu-calls 200 in 20ms
+ ✓ Compiled /_not-found in 152ms (626 modules)
+ GET /_next/static/webpack/22435fdb69ed9547.webpack.hot-update.json 404 in 173ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/creators-ftu-calls 200 in 20ms
+ GET /admin/creators-ftu-calls 200 in 44ms
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/Applications/XAMPP/xamppfiles/htdocs/hima_base/frontend/.next/cache/webpack/server-development/1.pack.gz_' -> '/Applications/XAMPP/xamppfiles/htdocs/hima_base/frontend/.next/cache/webpack/server-development/1.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/Applications/XAMPP/xamppfiles/htdocs/hima_base/frontend/.next/cache/webpack/client-development/2.pack.gz_' -> '/Applications/XAMPP/xamppfiles/htdocs/hima_base/frontend/.next/cache/webpack/client-development/2.pack.gz'
+ ✓ Compiled in 715ms (637 modules)
+ GET /admin/creators-ftu-calls 200 in 52ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/creators-ftu-calls 200 in 261ms
+ ✓ Compiled in 551ms (637 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/creators-ftu-calls 200 in 57ms
+ GET /admin/creators-ftu-calls 200 in 107ms
+ ✓ Compiled in 449ms (637 modules)
+ GET /admin/creators-ftu-calls 200 in 20ms
+ ✓ Compiled in 799ms (637 modules)
  GET /admin/creators-ftu-calls 200 in 49ms
  ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
- GET /admin/creators-ftu-calls 200 in 65ms
- ✓ Compiled in 240ms (639 modules)
- GET /admin/creators-ftu-calls 200 in 31ms
+ GET /admin/creators-ftu-calls 200 in 44ms
+ ✓ Compiled in 653ms (637 modules)
+ GET /admin/creators-ftu-calls 200 in 28ms
+ ✓ Compiled /_not-found in 263ms (626 modules)
  ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
- GET /admin/creators-ftu-calls 200 in 53ms
+ GET /_next/static/webpack/76dfded925893e9d.webpack.hot-update.json 404 in 288ms
+ GET /admin/creators-ftu-calls 200 in 26ms
+ GET /admin/creators-ftu-calls 200 in 63ms
+ ✓ Compiled in 885ms (637 modules)
+ GET /admin/creators-ftu-calls 200 in 32ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /admin/creators-ftu-calls 200 in 121ms
+ ✓ Compiled in 631ms (637 modules)
+ GET /admin/creators-ftu-calls 200 in 61ms
+ ✓ Compiled /admin/inactive-creators in 361ms (633 modules)
+ GET /admin/inactive-creators 200 in 392ms
+ ✓ Compiled /dashboard in 223ms (646 modules)
+ GET /dashboard 200 in 256ms
+ ✓ Compiled /admin/users in 167ms (662 modules)
+ GET /admin/users 200 in 183ms
+ GET /dashboard 200 in 75ms
+ GET /admin/users 200 in 9ms
+ ✓ Compiled /admin/creators-avg-time in 406ms (676 modules)
+ GET /admin/creators-avg-time 200 in 447ms
+ ✓ Compiled /admin/creators-weekly-avg in 226ms (682 modules)
+ GET /admin/creators-weekly-avg 200 in 286ms
+ ✓ Compiled /admin/creators-payouts in 360ms (690 modules)
+ GET /admin/creators-payouts 200 in 380ms
+ GET /admin/creators-ftu-calls 200 in 19ms
+d
+ GET /_next/static/webpack/6e99304184a13628.webpack.hot-update.json 404 in 395ms
+ GET /admin/creators-ftu-calls 200 in 36ms

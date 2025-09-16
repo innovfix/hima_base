@@ -1,0 +1,46 @@
+
+> analytics-frontend@0.1.0 build
+> next build
+
+  ▲ Next.js 15.0.0
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/20) ...
+   Generating static pages (5/20) 
+   Generating static pages (10/20) 
+   Generating static pages (15/20) 
+ ✓ Generating static pages (20/20)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                Size     First Load JS
+┌ ○ /                                      1.15 kB         101 kB
+├ ○ /_not-found                            902 B           100 kB
+├ ○ /admin/active-users-monitor            1.53 kB         201 kB
+├ ○ /admin/creator-income-retention        4.45 kB         204 kB
+├ ○ /admin/creators-avg-time               2.82 kB         112 kB
+├ ○ /admin/creators-ftu-calls              3.34 kB         103 kB
+├ ○ /admin/creators-income                 3.3 kB          103 kB
+├ ○ /admin/creators-payouts                4.01 kB         103 kB
+├ ○ /admin/creators-weekly-avg             2.91 kB         102 kB
+├ ○ /admin/inactive-creators               2.61 kB         102 kB
+├ ○ /admin/reg-vs-payers                   6.05 kB         206 kB
+├ ○ /admin/registrations-paid-by-language  3.8 kB          199 kB
+├ ○ /admin/repeat-payers                   4.19 kB         204 kB
+├ ○ /admin/retention                       4.57 kB         104 kB
+├ ○ /admin/retention-trends                5.45 kB         205 kB
+├ ○ /admin/send-report                     1.07 kB         100 kB
+├ ○ /admin/users                           4.03 kB         103 kB
+└ ○ /dashboard                             1.99 kB         101 kB
++ First Load JS shared by all              99.4 kB
+  ├ chunks/215-7d91d0c7c89b81e1.js         44.9 kB
+  ├ chunks/4bd1b696-d9e2a9d274b2cd2b.js    52.6 kB
+  └ other shared chunks (total)            1.95 kB
+
+
+○  (Static)  prerendered as static content
+

@@ -9,7 +9,7 @@ import { BarChart3, RefreshCw, Filter, SortAsc, SortDesc } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
-type Row = { creator_id: number; creator_name?: string; language?: string; ftu_calls_count: number; avg_ftu_per_day?: number; avg_ftu_duration_seconds?: number }
+type Row = { creator_id: number; creator_name?: string; language?: string; ftu_calls_count: number; avg_ftu_per_day?: number; avg_ftu_duration_seconds?: number; repeat_callers_count?: number }
 
 export default function CreatorsFtuCallsPage() {
   const [rows, setRows] = useState<Row[]>([])
@@ -23,33 +23,48 @@ export default function CreatorsFtuCallsPage() {
   const [dateTo, setDateTo] = useState('')
   const [search, setSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
-  // Sorting: default to Avg Duration DESC
+  // Sorting
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC')
+  const [sortBy, setSortBy] = useState<'avg_ftu_duration_seconds' | 'ftu_calls_count' | 'repeat_callers_count' | 'avg_ftu_per_day'>('avg_ftu_duration_seconds')
   // Local paging when we need to sort the entire dataset client-side
   const [allRows, setAllRows] = useState<Row[] | null>(null)
   const manualFetchRef = useRef(false)
   // Minimum FTU calls (unique users) to include per creator
   const [minCalls, setMinCalls] = useState<number>(10)
+  const [language, setLanguage] = useState<string>('All')
+  const [languages, setLanguages] = useState<string[]>([])
+  // Applied filter snapshot (used for all requests)
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [appliedDateFrom, setAppliedDateFrom] = useState('')
+  const [appliedDateTo, setAppliedDateTo] = useState('')
+  const [appliedMinCalls, setAppliedMinCalls] = useState<number>(10)
+  const [appliedLanguage, setAppliedLanguage] = useState<string>('All')
 
   const fetchData = async (
     fetchAll = false,
     overrideSort?: 'ASC' | 'DESC',
-    overrideLimit?: number
+    overrideLimit?: number,
+    overrideSortBy?: 'avg_ftu_duration_seconds' | 'ftu_calls_count' | 'repeat_callers_count' | 'avg_ftu_per_day'
   ) => {
     try {
       setLoading(true)
       setError(null)
       const params = new URLSearchParams()
-      // Request backend ordering by average FTU duration seconds
-      params.set('sortBy', 'avg_ftu_duration_seconds')
+      // Determine effective sortBy for API (map avg_ftu_per_day to ftu_calls_count)
+      const desiredSortBy = overrideSortBy || sortBy
+      const apiSortBy = desiredSortBy === 'avg_ftu_per_day' ? 'ftu_calls_count' : desiredSortBy
+      params.set('sortBy', apiSortBy)
       params.set('sortOrder', overrideSort || sortOrder)
       const effectiveLimit = overrideLimit ?? limit
-      params.set('page', String(fetchAll ? 1 : page))
-      params.set('limit', String(fetchAll ? 100000 : effectiveLimit))
-      if (dateFrom) params.set('dateFrom', dateFrom)
-      if (dateTo) params.set('dateTo', dateTo)
-      if (search) params.set('search', search)
-      params.set('minCalls', String(minCalls))
+      // When sorting by avg duration we optionally fetch all to allow local pagination across fully sorted list
+      const shouldFetchAll = fetchAll || (desiredSortBy === 'avg_ftu_duration_seconds' && fetchAll)
+      params.set('page', String(shouldFetchAll ? 1 : page))
+      params.set('limit', String(shouldFetchAll ? 100000 : effectiveLimit))
+      if (appliedDateFrom) params.set('dateFrom', appliedDateFrom)
+      if (appliedDateTo) params.set('dateTo', appliedDateTo)
+      if (appliedSearch) params.set('search', appliedSearch)
+      params.set('minCalls', String(appliedMinCalls))
+      if (appliedLanguage && appliedLanguage !== 'All') params.set('language', appliedLanguage)
       // Add cache-busting param to ensure the browser doesn't serve a stale response when toggling sort
       params.set('_', String(Date.now()))
       const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
@@ -57,7 +72,9 @@ export default function CreatorsFtuCallsPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       const list: Row[] = json.creators || []
-      if (fetchAll) {
+      // Load language options when present
+      if (Array.isArray(json.languages)) setLanguages(json.languages)
+      if (shouldFetchAll) {
         setAllRows(list)
         setTotal(list.length)
         setTotalPages(Math.max(1, Math.ceil(list.length / effectiveLimit)))
@@ -91,7 +108,10 @@ export default function CreatorsFtuCallsPage() {
     if (manualFetchRef.current) return
     fetchData(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, dateFrom, dateTo, search, sortOrder, minCalls])
+  }, [page, limit, sortOrder, sortBy, appliedSearch, appliedDateFrom, appliedDateTo, appliedMinCalls, appliedLanguage])
+  
+  // ensure we have languages list on first load
+  useEffect(() => { if (languages.length === 0 && !loading) fetchData(false) }, [])
 
   const formatDuration = (seconds: number) => {
     // seconds -> Hh Mm Ss
@@ -136,7 +156,6 @@ export default function CreatorsFtuCallsPage() {
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { setPage(1); fetchData() } }}
                   placeholder="Creator name or ID"
                   className="w-full border rounded px-3 py-2"
                 />
@@ -146,17 +165,23 @@ export default function CreatorsFtuCallsPage() {
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={minCalls}
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value, 10) || 0
-                    setMinCalls(v)
-                    setPage(1)
-                    setAllRows(null)
-                    manualFetchRef.current = true
-                    fetchData(false)
-                  }}
+                  onChange={(e) => { const v = parseInt(e.target.value, 10) || 0; setMinCalls(v) }}
                 >
                   {[1,5,10,20,50].map(n => (
                     <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={language}
+                  onChange={(e) => { setLanguage(e.target.value) }}
+                >
+                  <option value="All">All</option>
+                  {languages.map(l => (
+                    <option key={l} value={l}>{l}</option>
                   ))}
                 </select>
               </div>
@@ -169,10 +194,47 @@ export default function CreatorsFtuCallsPage() {
                 <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full border rounded px-3 py-2" />
               </div>
               <div className="flex items-end">
-                <button onClick={() => { setDateFrom(''); setDateTo(''); setSearch(''); setMinCalls(10); setPage(1); setAllRows(null); manualFetchRef.current = true; fetchData(false) }} className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded">Clear</button>
+                <button
+                  onClick={() => {
+                    // Reset inputs and applied filters to defaults
+                    setSearch('')
+                    setDateFrom('')
+                    setDateTo('')
+                    setMinCalls(10)
+                    setLanguage('All')
+                    setAppliedSearch('')
+                    setAppliedDateFrom('')
+                    setAppliedDateTo('')
+                    setAppliedMinCalls(10)
+                    setAppliedLanguage('All')
+                    setPage(1)
+                    setAllRows(null)
+                    manualFetchRef.current = true
+                    fetchData(false)
+                  }}
+                  className="w-full bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded"
+                >
+                  Clear
+                </button>
               </div>
               <div className="flex items-end">
-                <button onClick={() => { setPage(1); fetchData() }} className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded">Apply</button>
+                <button
+                  onClick={() => {
+                    // Apply current inputs
+                    setAppliedSearch(search)
+                    setAppliedDateFrom(dateFrom)
+                    setAppliedDateTo(dateTo)
+                    setAppliedMinCalls(minCalls)
+                    setAppliedLanguage(language)
+                    setPage(1)
+                    setAllRows(null)
+                    manualFetchRef.current = true
+                    fetchData(false)
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded"
+                >
+                  Apply
+                </button>
               </div>
             </div>
           </div>
@@ -192,22 +254,83 @@ export default function CreatorsFtuCallsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creator ID</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creator</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Language</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FTU Calls Count</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg FTU/Day</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <span>FTU Calls Count</span>
+                      <button
+                        type="button"
+                        aria-label="Sort FTU calls asc"
+                        className={`p-1 rounded ${sortBy==='ftu_calls_count' && sortOrder==='ASC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => { setSortBy('ftu_calls_count'); setSortOrder('ASC'); setPage(1); manualFetchRef.current = true; fetchData(false, 'ASC', undefined, 'ftu_calls_count') }}
+                      >
+                        <SortAsc className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Sort FTU calls desc"
+                        className={`p-1 rounded ${sortBy==='ftu_calls_count' && sortOrder==='DESC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => { setSortBy('ftu_calls_count'); setSortOrder('DESC'); setPage(1); manualFetchRef.current = true; fetchData(false, 'DESC', undefined, 'ftu_calls_count') }}
+                      >
+                        <SortDesc className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <span>Avg FTU/Day</span>
+                      <button
+                        type="button"
+                        aria-label="Sort Avg FTU/Day asc"
+                        className={`p-1 rounded ${sortBy==='avg_ftu_per_day' && sortOrder==='ASC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => { setSortBy('avg_ftu_per_day'); setSortOrder('ASC'); setPage(1); manualFetchRef.current = true; fetchData(false, 'ASC', undefined, 'avg_ftu_per_day') }}
+                      >
+                        <SortAsc className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Sort Avg FTU/Day desc"
+                        className={`p-1 rounded ${sortBy==='avg_ftu_per_day' && sortOrder==='DESC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => { setSortBy('avg_ftu_per_day'); setSortOrder('DESC'); setPage(1); manualFetchRef.current = true; fetchData(false, 'DESC', undefined, 'avg_ftu_per_day') }}
+                      >
+                        <SortDesc className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <span>Repeat Callers</span>
+                      <button
+                        type="button"
+                        aria-label="Sort Repeat Callers asc"
+                        className={`p-1 rounded ${sortBy==='repeat_callers_count' && sortOrder==='ASC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => { setSortBy('repeat_callers_count'); setSortOrder('ASC'); setPage(1); manualFetchRef.current = true; fetchData(false, 'ASC', undefined, 'repeat_callers_count') }}
+                      >
+                        <SortAsc className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Sort Repeat Callers desc"
+                        className={`p-1 rounded ${sortBy==='repeat_callers_count' && sortOrder==='DESC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => { setSortBy('repeat_callers_count'); setSortOrder('DESC'); setPage(1); manualFetchRef.current = true; fetchData(false, 'DESC', undefined, 'repeat_callers_count') }}
+                      >
+                        <SortDesc className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <div className="flex items-center gap-2">
                       <span>Avg Duration</span>
                       <button
                         type="button"
                         aria-label="Sort ascending"
-                        className={`p-1 rounded ${sortOrder === 'ASC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        className={`p-1 rounded ${sortBy==='avg_ftu_duration_seconds' && sortOrder === 'ASC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
                         onClick={() => {
-                          if (sortOrder !== 'ASC') {
+                          if (sortBy !== 'avg_ftu_duration_seconds' || sortOrder !== 'ASC') {
                             setPage(1)
+                            setSortBy('avg_ftu_duration_seconds')
                             setSortOrder('ASC')
-                            // Fetch all to apply sort across full dataset and locally paginate
                             manualFetchRef.current = true
-                            fetchData(true, 'ASC')
+                            fetchData(true, 'ASC', undefined, 'avg_ftu_duration_seconds')
                           }
                         }}
                       >
@@ -216,13 +339,14 @@ export default function CreatorsFtuCallsPage() {
                       <button
                         type="button"
                         aria-label="Sort descending"
-                        className={`p-1 rounded ${sortOrder === 'DESC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        className={`p-1 rounded ${sortBy==='avg_ftu_duration_seconds' && sortOrder === 'DESC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
                         onClick={() => {
-                          if (sortOrder !== 'DESC') {
+                          if (sortBy !== 'avg_ftu_duration_seconds' || sortOrder !== 'DESC') {
                             setPage(1)
+                            setSortBy('avg_ftu_duration_seconds')
                             setSortOrder('DESC')
                             manualFetchRef.current = true
-                            fetchData(true, 'DESC')
+                            fetchData(true, 'DESC', undefined, 'avg_ftu_duration_seconds')
                           }
                         }}
                       >
@@ -242,6 +366,7 @@ export default function CreatorsFtuCallsPage() {
                     <td className="px-4 py-2 text-sm text-gray-900">{r.language || '-'}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{r.ftu_calls_count}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{typeof r.avg_ftu_per_day === 'number' ? r.avg_ftu_per_day.toFixed(2) : '-'}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{typeof r.repeat_callers_count === 'number' ? r.repeat_callers_count : '-'}</td>
                     <td className="px-4 py-2 text-sm">
                       {typeof r.avg_ftu_duration_seconds === 'number' ? (
                         r.avg_ftu_duration_seconds < 0 ? (
