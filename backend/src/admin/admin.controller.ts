@@ -1499,6 +1499,7 @@ export class AdminController {
     const baseGroupedQuery = `
       SELECT fc.creator_id,
              COALESCE(u.name,'') as creator_name,
+             COALESCE(u.language,'Unknown') as language,
              COUNT(DISTINCT fc.user_id) AS ftu_calls_count,
              AVG(${durationExpr}) AS avg_ftu_duration_seconds,
              CASE WHEN AVG(${durationExpr}) IS NULL OR AVG(${durationExpr}) < 0 THEN 1 ELSE 0 END AS is_invalid
@@ -1509,7 +1510,7 @@ export class AdminController {
        AND c2.datetime = fc.first_dt
       LEFT JOIN users u ON u.id = fc.creator_id
       ${where}
-      GROUP BY fc.creator_id, COALESCE(u.name,'')
+      GROUP BY fc.creator_id, COALESCE(u.name,''), COALESCE(u.language,'Unknown')
       HAVING COUNT(DISTINCT fc.user_id) >= ?
     `
 
