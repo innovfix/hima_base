@@ -31,7 +31,11 @@ export default function CreatorsFtuCallsPage() {
   // Minimum FTU calls (unique users) to include per creator
   const [minCalls, setMinCalls] = useState<number>(10)
 
-  const fetchData = async (fetchAll = false, overrideSort?: 'ASC' | 'DESC') => {
+  const fetchData = async (
+    fetchAll = false,
+    overrideSort?: 'ASC' | 'DESC',
+    overrideLimit?: number
+  ) => {
     try {
       setLoading(true)
       setError(null)
@@ -39,8 +43,9 @@ export default function CreatorsFtuCallsPage() {
       // Request backend ordering by average FTU duration seconds
       params.set('sortBy', 'avg_ftu_duration_seconds')
       params.set('sortOrder', overrideSort || sortOrder)
+      const effectiveLimit = overrideLimit ?? limit
       params.set('page', String(fetchAll ? 1 : page))
-      params.set('limit', String(fetchAll ? 100000 : limit))
+      params.set('limit', String(fetchAll ? 100000 : effectiveLimit))
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
       if (search) params.set('search', search)
@@ -55,16 +60,16 @@ export default function CreatorsFtuCallsPage() {
       if (fetchAll) {
         setAllRows(list)
         setTotal(list.length)
-        setTotalPages(Math.max(1, Math.ceil(list.length / limit)))
-        const start = (page - 1) * limit
-        setRows(list.slice(start, start + limit))
+        setTotalPages(Math.max(1, Math.ceil(list.length / effectiveLimit)))
+        const start = (page - 1) * effectiveLimit
+        setRows(list.slice(start, start + effectiveLimit))
       } else {
         setAllRows(null)
         setRows(list)
         const totalCount = Number(json.pagination?.total || 0) || list.length || 0
         setTotal(totalCount)
         // Always compute totalPages on the client using the current limit to avoid mismatches
-        setTotalPages(Math.max(1, Math.ceil(totalCount / limit)))
+        setTotalPages(Math.max(1, Math.ceil(totalCount / effectiveLimit)))
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load data')
@@ -267,7 +272,7 @@ export default function CreatorsFtuCallsPage() {
                   // Always refetch from server for page-size changes to keep counts/pages consistent
                   setAllRows(null)
                   manualFetchRef.current = true
-                  fetchData(false)
+                  fetchData(false, undefined, n)
                 }}
                 className="border rounded px-2 py-2 text-sm"
               >
