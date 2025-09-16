@@ -25,8 +25,10 @@ export default function CreatorsFtuCallsPage() {
   const [showFilters, setShowFilters] = useState(false)
   // Sorting: default to Avg Duration DESC
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC')
+  // Local paging when we need to sort the entire dataset client-side
+  const [allRows, setAllRows] = useState<Row[] | null>(null)
 
-  const fetchData = async () => {
+  const fetchData = async (fetchAll = false) => {
     try {
       setLoading(true)
       setError(null)
@@ -34,8 +36,8 @@ export default function CreatorsFtuCallsPage() {
       // Request backend ordering by average FTU duration seconds
       params.set('sortBy', 'avg_ftu_duration_seconds')
       params.set('sortOrder', sortOrder)
-      params.set('page', String(page))
-      params.set('limit', String(limit))
+      params.set('page', String(fetchAll ? 1 : page))
+      params.set('limit', String(fetchAll ? 100000 : limit))
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
       if (search) params.set('search', search)
@@ -45,10 +47,19 @@ export default function CreatorsFtuCallsPage() {
       const res = await fetch(`${base}/api/admin/creators-ftu-calls?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      // Use backend-provided ordering so sorting applies to the entire dataset (not just this page)
-      setRows(json.creators || [])
-      setTotal(json.pagination?.total || 0)
-      setTotalPages(json.pagination?.totalPages || 1)
+      const list: Row[] = json.creators || []
+      if (fetchAll) {
+        setAllRows(list)
+        setTotal(list.length)
+        setTotalPages(Math.max(1, Math.ceil(list.length / limit)))
+        const start = (page - 1) * limit
+        setRows(list.slice(start, start + limit))
+      } else {
+        setAllRows(null)
+        setRows(list)
+        setTotal(json.pagination?.total || list.length || 0)
+        setTotalPages(json.pagination?.totalPages || Math.max(1, Math.ceil((list.length || 0) / limit)))
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load data')
     } finally {
@@ -151,9 +162,10 @@ export default function CreatorsFtuCallsPage() {
                         className={`p-1 rounded ${sortOrder === 'ASC' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
                         onClick={() => {
                           if (sortOrder !== 'ASC') {
-                            // When changing sort, reset to a large page size temporarily to fetch a stable view
                             setPage(1)
                             setSortOrder('ASC')
+                            // Fetch all to apply sort across full dataset and locally paginate
+                            fetchData(true)
                           }
                         }}
                       >
@@ -167,6 +179,7 @@ export default function CreatorsFtuCallsPage() {
                           if (sortOrder !== 'DESC') {
                             setPage(1)
                             setSortOrder('DESC')
+                            fetchData(true)
                           }
                         }}
                       >
