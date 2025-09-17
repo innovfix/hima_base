@@ -9,7 +9,17 @@ import { BarChart3, RefreshCw, Filter, SortAsc, SortDesc } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL || ''
 
-type Row = { creator_id: number; creator_name?: string; language?: string; ftu_calls_count: number; avg_ftu_per_day?: number; avg_ftu_duration_seconds?: number; repeat_callers_count?: number }
+type Row = {
+  creator_id: number
+  creator_name?: string
+  language?: string
+  audio_status?: number | null
+  video_status?: number | null
+  ftu_calls_count: number
+  avg_ftu_per_day?: number
+  avg_ftu_duration_seconds?: number
+  repeat_callers_count?: number
+}
 
 export default function CreatorsFtuCallsPage() {
   const [rows, setRows] = useState<Row[]>([])
@@ -283,6 +293,8 @@ export default function CreatorsFtuCallsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creator ID</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creator</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Language</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Audio</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Video</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <div className="flex items-center gap-2">
                       <span>FTU Calls Count</span>
@@ -393,6 +405,8 @@ export default function CreatorsFtuCallsPage() {
                     <td className="px-4 py-2 text-sm text-gray-900">{r.creator_id}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{r.creator_name || '-'}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{r.language || '-'}</td>
+                    <td className="px-4 py-2 text-sm">{renderStatus(r.audio_status)}</td>
+                    <td className="px-4 py-2 text-sm">{renderStatus(r.video_status)}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{r.ftu_calls_count}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{typeof r.avg_ftu_per_day === 'number' ? r.avg_ftu_per_day.toFixed(2) : '-'}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{typeof r.repeat_callers_count === 'number' ? r.repeat_callers_count : '-'}</td>
