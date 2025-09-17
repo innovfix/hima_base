@@ -1,0 +1,24 @@
+
+> analytics-dashboard@1.0.0 build
+> npm run build:backend && npm run build:frontend
+
+
+> analytics-dashboard@1.0.0 build:backend
+> cd backend && npm run build
+
+
+> analytics-backend@1.0.0 build
+> nest build
+
+
+> analytics-dashboard@1.0.0 build:frontend
+> cd frontend && npm run build
+
+
+> analytics-frontend@0.1.0 build
+> next build
+
+  ▲ Next.js 15.0.0
+  - Environments: .env.local
+
+   Creating an optimized production build ...
