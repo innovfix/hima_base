@@ -13,13 +13,20 @@ export default function OneTimePayoutCreatorsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  // Date filters removed: this page should always show one-time payout creators across full history
+  // (backend enforces the one-time constraint). We keep state variables for potential future use but
+  // they are unused now.
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [language, setLanguage] = useState('')
+  const [languages, setLanguages] = useState<string[]>([])
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit), dateFrom, dateTo })
+      // Do not send dateFrom/dateTo to the API — backend will determine one-time status globally
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+      if (language) params.set('language', language)
       const res = await fetch(`${API_BASE}/api/admin/one-time-payout-creators?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
@@ -33,6 +40,7 @@ export default function OneTimePayoutCreatorsPage() {
       setRows(creators)
       setTotal(json.pagination?.total || 0)
       setTotalPages(json.pagination?.totalPages || 1)
+      if (Array.isArray(json.languages)) setLanguages(json.languages)
     } catch (err) {
       console.error(err)
     } finally {
@@ -79,14 +87,14 @@ export default function OneTimePayoutCreatorsPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white border rounded-lg shadow-sm p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {/* Date filters removed: page always shows one-time payout creators */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-              <input type="date" value={dateFrom} onChange={(e)=>setDateFrom(e.target.value)} className="px-3 py-2 border rounded-md w-full" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-              <input type="date" value={dateTo} onChange={(e)=>setDateTo(e.target.value)} className="px-3 py-2 border rounded-md w-full" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} className="px-3 py-2 border rounded-md w-full">
+                <option value="">All</option>
+                {languages.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rows</label>
@@ -96,7 +104,7 @@ export default function OneTimePayoutCreatorsPage() {
             </div>
             <div className="flex items-end gap-2">
               <button onClick={()=>{ setPage(1); fetchData() }} className="bg-indigo-600 text-white px-4 py-2 rounded">Apply</button>
-              <button onClick={()=>{ setDateFrom(''); setDateTo(''); setPage(1); fetchData() }} className="bg-gray-600 text-white px-4 py-2 rounded">Clear</button>
+              <button onClick={()=>{ setDateFrom(''); setDateTo(''); setLanguage(''); setPage(1); fetchData() }} className="bg-gray-600 text-white px-4 py-2 rounded">Clear</button>
               <button onClick={() => exportCsv()} className="bg-emerald-600 text-white px-4 py-2 rounded">Export CSV</button>
             </div>
           </div>
