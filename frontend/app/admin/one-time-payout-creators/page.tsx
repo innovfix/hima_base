@@ -23,7 +23,14 @@ export default function OneTimePayoutCreatorsPage() {
       const res = await fetch(`${API_BASE}/api/admin/one-time-payout-creators?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      setRows(json.creators || [])
+      // Ensure default ordering: latest withdrawal datetime first
+      const creators = Array.isArray(json.creators) ? json.creators.slice() : []
+      creators.sort((a, b) => {
+        const ta = a?.datetime ? new Date(a.datetime).getTime() : 0
+        const tb = b?.datetime ? new Date(b.datetime).getTime() : 0
+        return tb - ta
+      })
+      setRows(creators)
       setTotal(json.pagination?.total || 0)
       setTotalPages(json.pagination?.totalPages || 1)
     } catch (err) {
