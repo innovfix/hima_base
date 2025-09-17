@@ -1421,7 +1421,8 @@ export class AdminController {
     @Query('dateTo') dateTo: string = '',
     @Query('search') search: string = '',
     @Query('minCalls') minCalls: string = '10',
-    @Query('language') language: string = ''
+    @Query('language') language: string = '',
+    @Query('type') type: string = 'audio' // audio | video | all
   ) {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1)
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200)
@@ -1465,6 +1466,16 @@ export class AdminController {
     if (language && language.toLowerCase() !== 'all') {
       whereClauses.push("COALESCE(u.language,'Unknown') = ?")
       params.push(language)
+    }
+
+    // Optional type filter: by creator's audio/video availability (user flags)
+    // Default is 'audio'. If type === 'audio' we restrict to creators with u.audio_status = 1
+    // If type === 'video' we restrict to creators with u.video_status = 1
+    const normalizedType = (type || 'audio').toLowerCase()
+    if (normalizedType === 'audio') {
+      whereClauses.push('COALESCE(u.audio_status,0) = 1')
+    } else if (normalizedType === 'video') {
+      whereClauses.push('COALESCE(u.video_status,0) = 1')
     }
     const where = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''
 
@@ -1524,7 +1535,9 @@ export class AdminController {
     const baseGroupedQuery = `
       SELECT fc.creator_id,
              COALESCE(u.name,'') as creator_name,
-             COALESCE(u.language,'Unknown') as language,
+             COALESCE(TRIM(u.language),'Unknown') as language,
+             COALESCE(u.audio_status,0) as audio_status,
+             COALESCE(u.video_status,0) as video_status,
              COUNT(DISTINCT fc.user_id) AS ftu_calls_count,
              AVG(${durationExpr}) AS avg_ftu_duration_seconds,
              COALESCE(MAX(r.repeat_callers_count), 0) AS repeat_callers_count,
@@ -1537,7 +1550,7 @@ export class AdminController {
       LEFT JOIN users u ON u.id = fc.creator_id
       LEFT JOIN (${repeatCallersSubquery}) r ON r.creator_id = fc.creator_id
       ${where}
-      GROUP BY fc.creator_id, COALESCE(u.name,''), COALESCE(u.language,'Unknown')
+      GROUP BY fc.creator_id, COALESCE(u.name,''), COALESCE(TRIM(u.language),'Unknown'), COALESCE(u.audio_status,0), COALESCE(u.video_status,0)
       HAVING COUNT(DISTINCT fc.user_id) >= ?
     `
 
@@ -1579,13 +1592,15 @@ export class AdminController {
     const withAvg = (rows as any[]).map(r => ({
       ...r,
       language: r.language || 'Unknown',
+      audio_status: Number(r.audio_status || 0),
+      video_status: Number(r.video_status || 0),
       avg_ftu_per_day: Number((Number(r.ftu_calls_count || 0) / daysInRange).toFixed(2)),
       avg_ftu_duration_seconds: Number(r.avg_ftu_duration_seconds || 0),
       repeat_callers_count: Number(r.repeat_callers_count || 0)
     }))
 
     // Languages list for filter dropdown
-    const [langs] = await this.pool.query(`SELECT DISTINCT COALESCE(language,'Unknown') as language FROM users ORDER BY language`)
+    const [langs] = await this.pool.query(`SELECT DISTINCT COALESCE(TRIM(language),'Unknown') as language FROM users ORDER BY language`)
 
     return {
       creators: withAvg,
