@@ -1665,6 +1665,57 @@ export class AdminController {
 
     return { ok: true }
   }
+
+  @Get('one-time-payout-creators')
+  async getOneTimePayoutCreators(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+    @Query('dateFrom') dateFrom: string = '',
+    @Query('dateTo') dateTo: string = ''
+  ) {
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1)
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200)
+    const offset = (pageNum - 1) * limitNum
+
+    const params: any[] = []
+    let where = "WHERE (w.status = 1 OR w.status = '1' OR LOWER(COALESCE(w.status,'')) = 'paid')"
+    if (dateFrom) { where += ' AND DATE(w.datetime) >= ?'; params.push(dateFrom) }
+    if (dateTo) { where += ' AND DATE(w.datetime) <= ?'; params.push(dateTo) }
+
+    // Count users who have exactly one paid withdrawal in history (optionally limited by date window)
+    const [countRows] = await this.pool.query(
+      `SELECT COUNT(*) as total FROM (
+         SELECT w.user_id
+         FROM withdrawals w
+         ${where}
+         GROUP BY w.user_id
+         HAVING COUNT(*) = 1
+       ) t`,
+      params
+    )
+    const total = (countRows as any[])[0]?.total || 0
+
+    // Select the single paid withdrawal row for each such user
+    const [rows] = await this.pool.query(
+      `SELECT u.id as user_id, COALESCE(u.name,'') as name, COALESCE(u.mobile,'') as mobile, COALESCE(u.language,'Unknown') as language,
+              w.id as withdrawal_id, w.amount, w.datetime
+       FROM withdrawals w
+       INNER JOIN users u ON u.id = w.user_id
+       ${where}
+       AND w.user_id IN (
+         SELECT w2.user_id FROM withdrawals w2 WHERE (w2.status = 1 OR w2.status = '1' OR LOWER(COALESCE(w2.status,'')) = 'paid') GROUP BY w2.user_id HAVING COUNT(*) = 1
+       )
+       ORDER BY w.datetime DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limitNum, offset]
+    )
+
+    return {
+      creators: rows,
+      pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum), hasNext: pageNum < Math.ceil(total / limitNum), hasPrev: pageNum > 1 },
+      filters: { dateFrom, dateTo }
+    }
+  }
 }
 
 

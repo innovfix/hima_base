@@ -68,6 +68,8 @@
  ✓ Compiled /admin/creators-payouts in 360ms (690 modules)
  GET /admin/creators-payouts 200 in 380ms
  GET /admin/creators-ftu-calls 200 in 19ms
-d
- GET /_next/static/webpack/6e99304184a13628.webpack.hot-update.json 404 in 395ms
+ GET /admin/users 200 in 73ms
+[?25h
+84a13628.webpack.hot-update.json 404 in 395ms
  GET /admin/creators-ftu-calls 200 in 36ms
+[?25h

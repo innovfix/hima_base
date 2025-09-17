@@ -18,6 +18,7 @@ const navItems = [
   { href: '/admin/creators-weekly-avg', label: 'Creators Weekly Avg', icon: BarChart3 },
   { href: '/admin/creator-income-retention', label: 'Creator Income Retention', icon: BarChart3 },
   { href: '/admin/creators-payouts', label: 'Creators Payouts', icon: Wallet },
+  { href: '/admin/one-time-payout-creators', label: 'One-time Payout Creators', icon: Wallet },
   { href: '/admin/creators-ftu-calls', label: 'Creators FTU Calls', icon: BarChart3 },
   { href: '/admin/inactive-creators', label: 'Inactive Creators', icon: Users },
   { href: '/admin/active-users-monitor', label: 'Active Users Monitor', icon: Globe },
