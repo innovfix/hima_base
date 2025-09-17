@@ -1,8 +1,12 @@
 /** @type {import('next').NextConfig} */
+const useBasePath = process.env.NEXT_USE_BASE_PATH === '1' || process.env.NEXT_USE_BASE_PATH === 'true'
+const basePath = useBasePath ? '/hima_base' : ''
+const assetPrefix = useBasePath ? '/hima_base/' : undefined
+
 const nextConfig = {
-  // Serve the app under /hima_base (works with Nginx sub-path proxy)
-  basePath: '/hima_base',
-  assetPrefix: '/hima_base/',
+  // Toggle basePath/assetPrefix via env to avoid local 404s
+  basePath,
+  assetPrefix,
   experimental: {
     // appDir: true, // This is deprecated in Next.js 15
   },

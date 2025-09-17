@@ -28,11 +28,17 @@ export default function DashboardPage() {
       setLoading(true)
       setError(null)
       const base = API_BASE || ''
-      const res = await fetch(`${base}/api/admin/dashboard-stats`)
+      // Log resolved API base for debugging in the browser console
+      // eslint-disable-next-line no-console
+      console.log('Dashboard fetch base:', base)
+
+      const res = await fetch(`${base}/api/admin/dashboard-stats`, { mode: 'cors' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setStats(json)
     } catch (e: any) {
+      // eslint-disable-next-line no-console
+      console.error('fetchStats error:', e)
       setError(e?.message || 'Failed to load')
     } finally {
       setLoading(false)
