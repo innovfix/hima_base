@@ -24,8 +24,8 @@ export default function OneTimePayoutCreatorsPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       // Ensure default ordering: latest withdrawal datetime first
-      const creators = Array.isArray(json.creators) ? json.creators.slice() : []
-      creators.sort((a, b) => {
+      const creators: any[] = Array.isArray(json.creators) ? json.creators.slice() : []
+      creators.sort((a: any, b: any) => {
         const ta = a?.datetime ? new Date(a.datetime).getTime() : 0
         const tb = b?.datetime ? new Date(b.datetime).getTime() : 0
         return tb - ta
