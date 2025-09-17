@@ -27,7 +27,12 @@ export default function OneTimePayoutCreatorsPage() {
       // Do not send dateFrom/dateTo to the API — backend will determine one-time status globally
       const params = new URLSearchParams({ page: String(page), limit: String(limit) })
       if (language) params.set('language', language)
-      const res = await fetch(`${API_BASE}/api/admin/one-time-payout-creators?${params.toString()}`)
+      // Use a runtime base URL when running in the browser so client requests target the
+      // same host the frontend is served from (avoids requesting the user's localhost).
+      const base = (typeof window !== 'undefined')
+        ? (API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`)
+        : (API_BASE || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001')
+      const res = await fetch(`${base}/api/admin/one-time-payout-creators?${params.toString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       // Ensure default ordering: latest withdrawal datetime first
