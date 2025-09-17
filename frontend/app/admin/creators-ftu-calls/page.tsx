@@ -32,6 +32,7 @@ export default function CreatorsFtuCallsPage() {
   // Minimum FTU calls (unique users) to include per creator
   const [minCalls, setMinCalls] = useState<number>(10)
   const [language, setLanguage] = useState<string>('All')
+  const [type, setType] = useState<string>('audio')
   const [languages, setLanguages] = useState<string[]>([])
   // Applied filter snapshot (used for all requests)
   const [appliedSearch, setAppliedSearch] = useState('')
@@ -39,6 +40,7 @@ export default function CreatorsFtuCallsPage() {
   const [appliedDateTo, setAppliedDateTo] = useState('')
   const [appliedMinCalls, setAppliedMinCalls] = useState<number>(10)
   const [appliedLanguage, setAppliedLanguage] = useState<string>('All')
+  const [appliedType, setAppliedType] = useState<string>('audio')
 
   const fetchData = async (
     fetchAll = false,
@@ -65,6 +67,7 @@ export default function CreatorsFtuCallsPage() {
       if (appliedSearch) params.set('search', appliedSearch)
       params.set('minCalls', String(appliedMinCalls))
       if (appliedLanguage && appliedLanguage !== 'All') params.set('language', appliedLanguage)
+      if (appliedType && appliedType !== 'all') params.set('type', appliedType)
       // Add cache-busting param to ensure the browser doesn't serve a stale response when toggling sort
       params.set('_', String(Date.now()))
       const base = API_BASE || `${window.location.protocol}//${window.location.hostname}:3001`
@@ -113,6 +116,9 @@ export default function CreatorsFtuCallsPage() {
   // ensure we have languages list on first load
   useEffect(() => { if (languages.length === 0 && !loading) fetchData(false) }, [])
 
+  // sync appliedType when user changes selector and clicks Apply
+  useEffect(() => { setAppliedType(type) }, [type])
+
   const formatDuration = (seconds: number) => {
     // seconds -> Hh Mm Ss
     const s = Math.floor(seconds)
@@ -123,6 +129,16 @@ export default function CreatorsFtuCallsPage() {
     if (h > 0) return `${h}h ${m}m ${sec}s`
     if (m > 0) return `${m}m ${sec}s`
     return `${sec}s`
+  }
+
+  const renderStatus = (value: any) => {
+    const n = Number(value)
+    const active = n === 1
+    return (
+      <span className={`inline-flex items-center justify-center w-8 h-6 text-xs font-semibold rounded ${active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'}`}>
+        {active ? 'On' : 'Off'}
+      </span>
+    )
   }
 
   return (
@@ -186,6 +202,18 @@ export default function CreatorsFtuCallsPage() {
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={type}
+                  onChange={(e) => { setType(e.target.value) }}
+                >
+                  <option value="audio">Audio</option>
+                  <option value="video">Video</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
                 <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full border rounded px-3 py-2" />
               </div>
@@ -226,6 +254,7 @@ export default function CreatorsFtuCallsPage() {
                     setAppliedDateTo(dateTo)
                     setAppliedMinCalls(minCalls)
                     setAppliedLanguage(language)
+                    setAppliedType(type)
                     setPage(1)
                     setAllRows(null)
                     manualFetchRef.current = true
