@@ -35,6 +35,32 @@ export default function OneTimePayoutCreatorsPage() {
 
   useEffect(() => { fetchData() }, [page, limit])
 
+  const exportCsv = () => {
+    const header = ['User ID','Name','Mobile','Language','Withdrawal ID','Amount','Withdrawal Datetime']
+    const lines = [header]
+    rows.forEach(r => {
+      lines.push([
+        r.user_id,
+        r.name || '',
+        r.mobile || '',
+        r.language || '',
+        r.withdrawal_id,
+        Number(r.amount||0).toFixed(2),
+        r.datetime || ''
+      ].map(v => String(v).replace(/"/g, '""')))
+    })
+    const csv = lines.map(cols => cols.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `one_time_payout_creators_${new Date().toISOString().slice(0,10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b">
@@ -64,6 +90,7 @@ export default function OneTimePayoutCreatorsPage() {
             <div className="flex items-end gap-2">
               <button onClick={()=>{ setPage(1); fetchData() }} className="bg-indigo-600 text-white px-4 py-2 rounded">Apply</button>
               <button onClick={()=>{ setDateFrom(''); setDateTo(''); setPage(1); fetchData() }} className="bg-gray-600 text-white px-4 py-2 rounded">Clear</button>
+              <button onClick={() => exportCsv()} className="bg-emerald-600 text-white px-4 py-2 rounded">Export CSV</button>
             </div>
           </div>
         </div>
