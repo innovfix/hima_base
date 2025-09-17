@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Serve the app under /hima_base (works with Nginx sub-path proxy)
+  basePath: '/hima_base',
+  assetPrefix: '/hima_base/',
   experimental: {
     // appDir: true, // This is deprecated in Next.js 15
   },
