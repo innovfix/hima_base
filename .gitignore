@@ -52,3 +52,10 @@ frontend/**/*.pid
 
 # TypeScript build info
 **/*.tsbuildinfo
+
+# Root-level runtime artifacts (do not commit)
+/*.log
+/*.out
+/*.pid
+/.apply_patch.tmp
+/public
